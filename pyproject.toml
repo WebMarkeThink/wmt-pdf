@@ -34,6 +34,9 @@ firma = [
     "aiohttp>=3.9",
     "pyhanko[etsi,image-support,pkcs11]>=0.37,<0.38",
 ]
+gui = [
+    "pywebview>=6.2,<7",
+]
 
 [project.scripts]
 wpdf = "wmt_pdf.cli:main"

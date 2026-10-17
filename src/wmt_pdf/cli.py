@@ -128,7 +128,26 @@ def build_parser() -> argparse.ArgumentParser:
     from wmt_pdf.cli_sign import register as register_sign
 
     register_sign(sub)
+
+    p = sub.add_parser("gui", help="Apre l'interfaccia grafica", description="Apre l'interfaccia grafica")
+    p.add_argument("--port", type=int, default=0, help="porta locale (di default una libera)")
+    p.add_argument("--no-window", action="store_true", help="non aprire finestra né browser (solo server)")
+    p.set_defaults(func=cmd_gui)
     return parser
+
+
+def cmd_gui(args) -> int:
+    import shutil
+    import tempfile
+
+    from wmt_pdf.gui.server import serve
+
+    workdir = Path(tempfile.mkdtemp(prefix="wmt-pdf-"))
+    try:
+        serve(workdir, args.port, open_window=not args.no_window)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)  # i file caricati e prodotti non restano sul disco
+    return EXIT_OK
 
 
 def add_password_args(p: argparse.ArgumentParser) -> None:

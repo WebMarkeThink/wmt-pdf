@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="wpdf-token" content="__TOKEN__">
+  <title>wmt-pdf</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Categorie">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg>
+        </span>
+        <span class="brand-name">wmt-pdf</span>
+      </div>
+      <nav id="categories" class="categories"></nav>
+      <p class="sidebar-note">I file restano su questo computer.</p>
+    </aside>
+
+    <main class="main">
+      <section id="home" class="view">
+        <header class="home-header">
+          <div>
+            <h1>Cosa vuoi fare?</h1>
+            <p class="lead">Scegli uno strumento, oppure trascina qui un PDF per aprirlo.</p>
+          </div>
+          <label class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="search" type="search" placeholder="Cerca uno strumento" autocomplete="off">
+          </label>
+        </header>
+        <div id="grid" class="grid" role="list"></div>
+        <p id="empty" class="empty" hidden>Nessuno strumento corrisponde alla ricerca.</p>
+      </section>
+
+      <section id="tool" class="view" hidden>
+        <header class="tool-header">
+          <button id="back" class="btn ghost" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            Strumenti
+          </button>
+          <div class="tool-title">
+            <span id="tool-icon" class="app-icon small"></span>
+            <div>
+              <h2 id="tool-name"></h2>
+              <p id="tool-desc" class="muted"></p>
+            </div>
+          </div>
+        </header>
+
+        <div class="tool-body">
+          <div class="panel">
+            <h3>File</h3>
+            <label id="drop" class="drop" tabindex="0">
+              <input id="file-input" type="file" multiple hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+              <strong>Trascina qui i file</strong>
+              <span class="muted" id="drop-hint">oppure fai clic per sceglierli</span>
+            </label>
+            <ol id="files" class="files"></ol>
+          </div>
+
+          <div class="panel">
+            <h3>Opzioni</h3>
+            <form id="options" class="options" autocomplete="off"></form>
+            <button id="run" class="btn primary" type="button" disabled>Esegui</button>
+            <p id="run-hint" class="muted small"></p>
+          </div>
+        </div>
+
+        <section id="result" class="panel result" hidden aria-live="polite">
+          <div class="result-head">
+            <h3>Risultato</h3>
+            <span id="verdict" class="badge" hidden></span>
+          </div>
+          <pre id="output" class="output"></pre>
+          <ul id="outputs" class="outputs"></ul>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="viewer" class="viewer" aria-label="Anteprima">
+    <header class="viewer-bar">
+      <strong id="viewer-name" class="viewer-name"></strong>
+      <div class="viewer-controls">
+        <button class="btn ghost" id="prev" type="button" aria-label="Pagina precedente">‹</button>
+        <span id="page-label" class="muted"></span>
+        <button class="btn ghost" id="next" type="button" aria-label="Pagina successiva">›</button>
+        <button class="btn ghost" id="zoom-out" type="button" aria-label="Riduci">−</button>
+        <button class="btn ghost" id="zoom-in" type="button" aria-label="Ingrandisci">+</button>
+        <a class="btn ghost" id="viewer-save" download>Salva</a>
+        <button class="btn" id="viewer-close" type="button">Chiudi</button>
+      </div>
+    </header>
+    <div class="viewer-body"><canvas id="canvas"></canvas></div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

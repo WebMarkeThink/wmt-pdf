@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wmt-pdf-gui",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "wpdf", "gui", "--no-window", "--port", "8765"],
+      "port": 8765
+    }
+  ]
+}

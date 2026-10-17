@@ -15,11 +15,26 @@ uv sync                     # base
 uv sync --extra ocr         # con OCR (RapidOCR, modelli scaricati al primo uso)
 uv sync --extra convert     # conversione da Word, Excel, PowerPoint, ODT, Markdown, HTML, email
 uv sync --extra firma       # firma digitale, smart card, verifica sull'elenco europeo dei certificatori
+uv sync --extra gui         # finestra nativa per l'interfaccia grafica (senza: si apre nel browser)
 uv sync --all-extras        # tutto
 uv run wpdf --help
 ```
 
-Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert,firma]"`.
+Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert,firma,gui]"`.
+
+## Interfaccia grafica
+
+```bash
+uv run wpdf gui
+```
+
+Si apre una finestra con gli strumenti a icone, divisi per categoria (leggi, organizza, converti, ottimizza,
+modifica, moduli, proteggi e firma): si sceglie lo strumento, si trascinano i file, si impostano le opzioni e
+si salva il risultato, con l'anteprima dei PDF. Usa lo stesso motore della riga di comando.
+
+Funziona su questo computer: un piccolo server su 127.0.0.1, raggiungibile solo dalla finestra (token di sessione,
+controllo di host e origine); i file caricati e prodotti stanno in una cartella temporanea che si cancella alla
+chiusura. Con l'extra `gui` si apre in una finestra nativa (pywebview, che su Windows usa WebView2); senza, nel browser.
 
 ## Comandi
 
@@ -143,6 +158,8 @@ Non leggere i PDF con Read: usa `wpdf`.
 - Filigrane: si tolgono solo quelle marcate come tali; una filigrana disegnata come testo normale non è distinguibile dal contenuto.
 - Ottimizzazione: ricomprime le immagini a colori e in scala di grigi; non tocca CMYK, maschere e immagini in bianco e nero, né i font.
 - PDF/A non ancora supportato.
+- Interfaccia grafica: prima versione. Mancano un visualizzatore con modifica diretta del testo e delle annotazioni,
+  la password dei PDF protetti per gli strumenti diversi da «Sblocca», gli installatori (vedi il piano).
 - `merge`, `pages` e `split`: i PDF protetti restano protetti, con la stessa password di apertura; per toglierla si usa `unlock`.
 - Conversione di un `.html` o `.md`: può includere immagini della sua cartella (e sottocartelle). Per un HTML scaricato
   da fonti non fidate conviene spostarlo prima in una cartella a sé.
