@@ -368,9 +368,9 @@ def serve(workdir: Path, port: int = 0, open_window: bool = True) -> None:
                 webview.settings["ALLOW_DOWNLOADS"] = True  # senza, «Scarica» non fa nulla nella finestra
                 server.desktop = True
                 api = DesktopApi(server)
-                api.window = webview.create_window("wmt-pdf", url, width=1280, height=840, min_size=(900, 600),
-                                                   js_api=api)
-                api.window.events.closing += api.confirm_close
+                window = webview.create_window("wmt-pdf", url, width=1280, height=840, min_size=(900, 600),
+                                               js_api=api)
+                api.attach_window(window)
                 webview.start()
                 return
             except ImportError:
@@ -391,16 +391,25 @@ class DesktopApi:
     I percorsi scelti qui finiscono nell'elenco di quelli ammessi dal server.
     """
 
-    window: Any = None  # finestra di pywebview, assegnata dopo create_window
+    # Tutto ciò che non serve alla pagina va con «_»: pywebview espone (ed esplora ricorsivamente) gli attributi
+    # pubblici di js_api, e la finestra ha migliaia di oggetti nativi: la pagina restava bloccata.
+    _window: Any = None  # finestra di pywebview, assegnata dopo create_window
 
     def __init__(self, server: GuiServer):
         self._server = server
+
+    def attach_window(self, window) -> None:
+        """Collega la finestra (non è un attributo pubblico: pywebview lo esplorerebbe all'infinito). Una volta sola."""
+        if self._window is not None:
+            return
+        self._window = window
+        window.events.closing += self._confirm_close
 
     def open_dialog(self):
         import webview
 
         types = ("Documenti PDF (*.pdf;*.p7m)",)
-        result = self.window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=False, file_types=types)
+        result = self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=False, file_types=types)
         if not result:
             return None
         path = str(result[0])
@@ -410,7 +419,7 @@ class DesktopApi:
     def save_dialog(self, name: str):
         import webview
 
-        result = self.window.create_file_dialog(webview.FileDialog.SAVE, save_filename=str(name or "documento.pdf"),
+        result = self._window.create_file_dialog(webview.FileDialog.SAVE, save_filename=str(name or "documento.pdf"),
                                                 file_types=("Documenti PDF (*.pdf)",))
         if not result:
             return None
@@ -420,11 +429,11 @@ class DesktopApi:
         self._server.documents.allow(path)
         return path
 
-    def confirm_close(self):
+    def _confirm_close(self):
         """Alla chiusura della finestra, conferma se ci sono modifiche non salvate (False annulla la chiusura)."""
         store = self._server.documents
         unsaved = [d.name for d in store.docs.values() if d.index != d.saved_index]
         if not unsaved:
             return True
-        return self.window.create_confirmation_dialog(
+        return self._window.create_confirmation_dialog(
             "Modifiche non salvate", f"{', '.join(unsaved)}: le modifiche non salvate andranno perse. Chiudere?")

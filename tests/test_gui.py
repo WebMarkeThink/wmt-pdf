@@ -304,3 +304,24 @@ def test_modified_after_undo_and_new_edit(server, tmp_path, text_pdf, cache):
     post(server, f"/api/doc/{did}/undo", {})
     _, result = post(server, f"/api/doc/{did}/apply", {"tool": "rotate", "options": {"angle": "180"}})
     assert result["document"]["modified"] is True
+
+
+def test_desktop_api_exposes_only_methods(server):
+    """pywebview esplora ricorsivamente gli attributi pubblici di js_api: la finestra non deve essere tra questi."""
+    import inspect
+
+    from wmt_pdf.gui.server import DesktopApi
+
+    class Event:
+        def __iadd__(self, handler):
+            return self
+
+    class FakeWindow:
+        class events:
+            closing = Event()
+
+    api = DesktopApi(server)
+    api.attach_window(FakeWindow())
+    public = [name for name in dir(api) if not name.startswith("_")]
+    assert public == ["attach_window", "open_dialog", "save_dialog"]
+    assert all(inspect.ismethod(getattr(api, name)) for name in public)
