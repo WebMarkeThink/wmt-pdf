@@ -139,13 +139,60 @@ async function loadTextBoxes() {
       left: `${Math.min(x0, x1) - 1}px`, top: `${Math.min(y0, y1) - 1}px`,
       width: `${Math.abs(x1 - x0) + 2}px`, height: `${Math.abs(y1 - y0) + 2}px`,
     });
-    box.addEventListener("click", (event) => {
-      if (doc.mode !== "select") return;
-      event.stopPropagation();
-      editObject(obj, box);
-    });
+    box.addEventListener("pointerdown", (event) => startDrag(event, obj, box));
+    box.addEventListener("click", (event) => event.stopPropagation());
     overlay.append(box);
   }
+}
+
+// Clic su un pezzo di testo: lo si modifica. Trascinandolo: lo si sposta.
+const DRAG_THRESHOLD = 4; // pixel: sotto questa soglia è un clic
+
+function startDrag(event, obj, box) {
+  if (doc.mode !== "select" || event.button !== 0 || doc.busy) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const overlay = $("overlay").getBoundingClientRect();
+  const drag = {
+    startX: event.clientX, startY: event.clientY,
+    left: parseFloat(box.style.left), top: parseFloat(box.style.top), moved: false,
+  };
+  box.setPointerCapture(event.pointerId);
+  const move = (e) => {
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      closePopover();
+      box.classList.add("dragging");
+    }
+    // Il riquadro resta dentro la pagina.
+    const left = Math.min(Math.max(0, drag.left + dx), overlay.width - box.offsetWidth);
+    const top = Math.min(Math.max(0, drag.top + dy), overlay.height - box.offsetHeight);
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+  };
+  const end = (e) => {
+    box.removeEventListener("pointermove", move);
+    box.removeEventListener("pointerup", end);
+    box.removeEventListener("pointercancel", end);
+    if (!drag.moved) {
+      editObject(obj, box);
+      return;
+    }
+    if (e.type === "pointercancel") {
+      loadTextBoxes();
+      return;
+    }
+    // Dallo spostamento sullo schermo a quello in punti PDF (tiene conto di zoom e rotazione).
+    const [x0, y0] = doc.viewport.convertToPdfPoint(drag.left, drag.top);
+    const [x1, y1] = doc.viewport.convertToPdfPoint(parseFloat(box.style.left), parseFloat(box.style.top));
+    apply("movetext", { page: doc.page, index: obj.index, by: `${(x1 - x0).toFixed(2)},${(y1 - y0).toFixed(2)}` });
+  };
+  box.addEventListener("pointermove", move);
+  box.addEventListener("pointerup", end);
+  box.addEventListener("pointercancel", end);
 }
 
 function setMode(mode) {

@@ -607,6 +607,66 @@ def edit_object(data: bytes, target: Path, page_no: int, new_text: str, *, at: t
     return EditResult(changed=1, recreated=recreated)
 
 
+def move_object(data: bytes, target: Path, page_no: int, index: int, *, by: tuple[float, float] | None = None,
+                to: tuple[float, float] | None = None, password: str | None = None) -> None:
+    """Sposta un pezzo di testo con lo stesso font, gli stessi caratteri e la stessa spaziatura.
+
+    Il pezzo originale si svuota conservando l'avanzamento (il resto della riga non si muove) e lo stesso
+    contenuto si riscrive in fondo al flusso della pagina, nella nuova posizione.
+    """
+    from wmt_pdf.ops import open_pdf
+
+    _refuse_signed(data)
+    infos = _read_page(data, page_no, password)
+    if not 0 <= index < len(infos):
+        raise CliError("pezzo di testo inesistente: vedi `wpdf textobjects`")
+    info = infos[index]
+    a, b, c, d, e, f = info.matrix
+    dx, dy = (to[0] - e, to[1] - f) if to is not None else (by or (0.0, 0.0))
+    with open_pdf(data, password) as pdf:
+        page = pdf.pages[page_no - 1]
+        instructions = list(pikepdf.parse_content_stream(page))
+        shows = _show_ops(instructions)
+        if len(shows) != len(infos):
+            raise CliError("struttura del testo di questa pagina non gestita: nessuna modifica fatta")
+        show = shows[index]
+        original = instructions[show.position]
+        fonts = page.obj.get("/Resources", {}).get("/Font", {})
+        font = fonts.get(show.font) if show.font else None
+        if font is None:
+            raise CliError("font del testo non trovato tra le risorse della pagina: nessuna modifica fatta")
+        replacement = _replacement(original, show, b"", _widths(font))
+        rebuilt = []
+        for i, ins in enumerate(instructions):
+            rebuilt.extend(replacement if i == show.position else [ins])
+        op = pikepdf.Operator
+        moved = [pikepdf.ContentStreamInstruction([], op("BT")),
+                 pikepdf.ContentStreamInstruction([pikepdf.Name(show.font), show.size], op("Tf")),
+                 pikepdf.ContentStreamInstruction([show.char_spacing], op("Tc")),
+                 pikepdf.ContentStreamInstruction([show.word_spacing], op("Tw"))]
+        if 0 <= info.mode <= 7:
+            moved.append(pikepdf.ContentStreamInstruction([info.mode], op("Tr")))
+        if info.fill:
+            moved.append(pikepdf.ContentStreamInstruction([round(v / 255, 4) for v in info.fill], op("rg")))
+        if info.stroke:
+            moved.append(pikepdf.ContentStreamInstruction([round(v / 255, 4) for v in info.stroke], op("RG")))
+        moved.append(pikepdf.ContentStreamInstruction([a, b, c, d, e + dx, f + dy], op("Tm")))
+        if str(original.operator) == "TJ":
+            moved.append(pikepdf.ContentStreamInstruction([original.operands[0]], op("TJ")))  # crenatura compresa
+        else:
+            moved.append(pikepdf.ContentStreamInstruction([original.operands[-1]], op("Tj")))
+        moved.append(pikepdf.ContentStreamInstruction([], op("ET")))
+        # Il contenuto originale tra q e Q: le sue trasformazioni non toccano il testo spostato.
+        page.obj.Contents = pdf.make_stream(
+            b"q\n" + pikepdf.unparse_content_stream(rebuilt) + b"\nQ\n" + pikepdf.unparse_content_stream(moved))
+        buf = io.BytesIO()
+        pdf.save(buf, encryption=pdf.is_encrypted)
+    result = buf.getvalue()
+    expected = [i.text for k, i in enumerate(infos) if k != index] + [info.text]
+    _verify(result, page_no, password, expected)
+    _write(result, target)
+
+
 def parse_color(text: str) -> tuple[int, int, int]:
     match = re.fullmatch(r"#?([0-9a-fA-F]{6})", text.strip())
     if not match:

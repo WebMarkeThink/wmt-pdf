@@ -32,7 +32,8 @@ Due modi di lavorare, con la barra in alto sempre disponibile (Apri, Recenti, An
 Salva con nome, Scarica):
 
 - **Documento**: si apre un PDF (Apri, trascinandolo nella finestra, o dai recenti) e lo si modifica direttamente:
-  clic su un testo per cambiarlo o eliminarlo, «Aggiungi testo» e clic sul punto per scrivere, ruota o elimina la
+  clic su un testo per cambiarlo o eliminarlo, trascinalo per spostarlo (anche quello appena aggiunto),
+  «Aggiungi testo» e clic sul punto per scrivere, ruota o elimina la
   pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti applicati al documento aperto. Ogni modifica
   è una versione: si annulla e si ripete. Miniature delle pagine a sinistra.
 - **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,
@@ -91,6 +92,7 @@ Per i PDF protetti: `--password` oppure `--password-env NOME_VARIABILE` (non res
 | `wpdf textobjects FILE --page N [--json]` | pezzi di testo della pagina con posizione, font e corpo |
 | `wpdf replace FILE "vecchio" "nuovo" [--pages ...] -o out.pdf` | sostituisce un testo in tutto il documento |
 | `wpdf edittext FILE --page N --at x,y --text "nuovo" -o out.pdf` | cambia il pezzo di testo in quel punto (testo vuoto: lo elimina); oppure `--index` |
+| `wpdf movetext FILE --page N --index I --by dx,dy -o out.pdf` | sposta un pezzo di testo (stesso font e caratteri); oppure `--to x,y` per la nuova linea di base |
 | `wpdf addtext FILE --page N --at x,y --text "riga 1\nriga 2" [--size 11 --color #c00000 --bold] -o out.pdf` | scrive testo nuovo |
 
 Le coordinate sono in punti PDF dall'angolo in basso a sinistra (A4: 595 × 842). Quando le lettere nuove sono nel

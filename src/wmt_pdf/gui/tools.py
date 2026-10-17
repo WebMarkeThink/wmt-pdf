@@ -150,6 +150,12 @@ _TOOLS = [
              Option("at", "Punto x,y", "text", "--at"),
              Option("text", "Testo nuovo", "text", "--text", required=True),
          )),
+    Tool("movetext", "movetext", "Sposta testo", "Sposta un pezzo di testo", "edit-text", "modifica",
+         suffix="spostato", hidden=True, options=(
+             Option("page", "Pagina", "number", "--page", required=True, default=1),
+             Option("index", "Pezzo di testo", "number", "--index", required=True),
+             Option("by", "Spostamento dx,dy", "text", "--by", required=True),
+         )),
     Tool("addtext", "addtext", "Aggiungi testo", "Scrive testo in un punto della pagina", "add-text", "modifica",
          suffix="con_testo", hidden=True, options=(
              Option("page", "Pagina", "number", "--page", required=True, default=1),

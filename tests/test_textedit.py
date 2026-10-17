@@ -269,3 +269,58 @@ def test_following_piece_stays_in_place(capsys, tmp_path, same_line, new_text):
     assert code == 0, err
     after = _bbox(capsys, out, "893442")
     assert abs(after[0] - before[0]) < 0.5  # il numero non si è spostato
+
+
+# --- spostamento -----------------------------------------------------------------------------------
+
+
+def test_move_text_by_offset(capsys, tmp_path, letter):
+    before = _bbox(capsys, letter, "Scadenza: 31 dicembre")
+    other = _bbox(capsys, letter, "Il canone annuo è 1.200 euro")
+    out = tmp_path / "spostato.pdf"
+    code, _, err = run(capsys, "movetext", letter, "--page", "1", "--index", "1", "--by", "100,-50", "-o", out)
+    assert code == 0, err
+    after = _bbox(capsys, out, "Scadenza: 31 dicembre")
+    assert abs(after[0] - before[0] - 100) < 0.5 and abs(after[1] - before[1] + 50) < 0.5
+    assert _bbox(capsys, out, "Il canone annuo è 1.200 euro") == other  # l'altro non si muove
+
+
+def test_move_text_to_point_and_edit_again(capsys, tmp_path, letter):
+    moved = tmp_path / "m.pdf"
+    code, _, err = run(capsys, "movetext", letter, "--page", "1", "--index", "0", "--to", "300,400", "-o", moved)
+    assert code == 0, err
+    x0, y0, _, _ = _bbox(capsys, moved, "Il canone annuo è 1.200 euro")
+    # --to è l'origine del testo (linea di base): il riquadro dell'inchiostro parte poco dopo e poco sotto
+    assert 300 <= x0 < 302 and abs(y0 - 400) < 4
+    _, listing, _ = run(capsys, "textobjects", moved, "--page", "1", "--json")
+    index = next(o["index"] for o in json.loads(listing) if o["text"].startswith("Il canone"))
+    out = tmp_path / "m2.pdf"
+    code, _, err = run(capsys, "edittext", moved, "--page", "1", "--index", str(index), "--text", "Canone: 1.300", "-o", out)
+    assert code == 0, err
+    assert "Canone: 1.300" in text_of(out)
+
+
+def test_move_keeps_following_piece_on_line(capsys, tmp_path, same_line):
+    before = _bbox(capsys, same_line, "893442")
+    out = tmp_path / "riga_spostata.pdf"
+    code, _, err = run(capsys, "movetext", same_line, "--page", "1", "--index", "0", "--by", "0,100", "-o", out)
+    assert code == 0, err
+    assert abs(_bbox(capsys, out, "893442")[0] - before[0]) < 0.5
+    label_before = _bbox(capsys, same_line, "Codice Cliente: ")
+    assert abs(_bbox(capsys, out, "Codice Cliente: ")[1] - label_before[1] - 100) < 1
+
+
+def test_move_embedded_font_text_keeps_glyphs(capsys, tmp_path, embedded_font_pdf):
+    out = tmp_path / "m.pdf"
+    code, stdout, err = run(capsys, "movetext", embedded_font_pdf, "--page", "1", "--index", "0", "--by", "0,-200",
+                            "-o", out)
+    assert code == 0, err
+    assert "font di sistema" not in stdout
+    assert text_of(out).strip() == "Mario Rossi"
+
+
+def test_move_bad_arguments(capsys, tmp_path, letter):
+    code, _, err = run(capsys, "movetext", letter, "--page", "1", "--index", "9", "--by", "1,1", "-o", tmp_path / "x.pdf")
+    assert code == 1 and "inesistente" in err
+    code, _, err = run(capsys, "movetext", letter, "--page", "1", "--index", "0", "--by", "a,b", "-o", tmp_path / "x.pdf")
+    assert code == 1 and "--by" in err

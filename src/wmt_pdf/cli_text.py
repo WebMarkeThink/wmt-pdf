@@ -40,6 +40,13 @@ def register(sub) -> None:
     where.add_argument("--index", type=int, help="indice da `wpdf textobjects`")
     p.add_argument("--text", required=True, help="testo nuovo (vuoto per eliminarlo)")
 
+    p = add("movetext", cmd_movetext, "Sposta un pezzo di testo (stesso font e caratteri)")
+    p.add_argument("--page", type=int, required=True)
+    p.add_argument("--index", type=int, required=True, help="indice da `wpdf textobjects`")
+    where = p.add_mutually_exclusive_group(required=True)
+    where.add_argument("--by", help="spostamento dx,dy in punti (y verso l'alto)")
+    where.add_argument("--to", help="nuova origine x,y del testo (linea di base), in punti dal basso a sinistra")
+
     p = add("addtext", cmd_addtext, "Aggiunge testo in una posizione della pagina")
     p.add_argument("--page", type=int, required=True)
     p.add_argument("--at", required=True, help="inizio della prima riga, x,y in punti PDF dal basso a sinistra")
@@ -49,11 +56,11 @@ def register(sub) -> None:
     p.add_argument("--bold", action="store_true")
 
 
-def _point(text: str) -> tuple[float, float]:
+def _point(text: str, option: str = "--at") -> tuple[float, float]:
     try:
         x, y = (float(v) for v in text.split(","))
     except ValueError:
-        raise CliError("--at vuole due numeri: x,y") from None
+        raise CliError(f"{option} vuole due numeri: x,y") from None
     return x, y
 
 
@@ -112,6 +119,17 @@ def cmd_edittext(args) -> int:
     return EXIT_OK
 
 
+def cmd_movetext(args) -> int:
+    from wmt_pdf.textedit import move_object
+
+    by = _point(args.by, "--by") if args.by else None
+    to = _point(args.to, "--to") if args.to else None
+    source, password, target = _prepare(args)
+    move_object(source.data, target, args.page, args.index, by=by, to=to, password=password)
+    print(f"{target}: testo spostato a pagina {args.page}")
+    return EXIT_OK
+
+
 def cmd_addtext(args) -> int:
     from wmt_pdf.textedit import add_text, parse_color
 
@@ -120,7 +138,8 @@ def cmd_addtext(args) -> int:
     source, password, target = _prepare(args)
     lines = add_text(source.data, target, args.page, x, y, args.text.replace("\\n", "\n"), size=args.size,
                      color=color, bold=args.bold, password=password)
-    print(f"{target}: aggiunte {lines} righe di testo a pagina {args.page}")
+    what = "aggiunta 1 riga" if lines == 1 else f"aggiunte {lines} righe"
+    print(f"{target}: {what} di testo a pagina {args.page}")
     return EXIT_OK
 
 
