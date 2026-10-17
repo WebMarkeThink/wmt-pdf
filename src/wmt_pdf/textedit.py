@@ -275,38 +275,141 @@ def _encode(font: pikepdf.Object | None, text: str) -> bytes | None:
 
 @dataclass
 class _Change:
-    index: int  # n-esima istruzione di testo della pagina
+    index: int  # n-esimo pezzo di testo della pagina
     new_text: str
 
 
-def _show_ops(instructions: list) -> list[tuple[int, str | None]]:
-    """Posizione di ogni istruzione di testo nel flusso, con il font attivo (nome della risorsa)."""
-    result = []
-    font: str | None = None
-    stack: list[str | None] = []
+@dataclass
+class _Show:
+    """Un'istruzione che scrive testo, con lo stato del testo in quel punto."""
+
+    position: int  # posizione nel flusso
+    font: str | None  # nome della risorsa del font attivo
+    size: float  # corpo impostato con Tf
+    char_spacing: float  # Tc
+    word_spacing: float  # Tw
+
+
+def _strings(ins) -> list:
+    """Stringhe (bytes) e spostamenti (numeri) di un'istruzione di testo, nell'ordine."""
+    op = str(ins.operator)
+    if op == "TJ":
+        return [bytes(x) if isinstance(x, pikepdf.String) else float(x) for x in ins.operands[0]]
+    return [bytes(ins.operands[-1])]
+
+
+def _show_ops(instructions: list) -> list[_Show]:
+    """Le istruzioni che scrivono davvero qualcosa: PDFium non crea pezzi di testo per quelle vuote."""
+    result: list[_Show] = []
+    state = {"font": None, "size": 0.0, "tc": 0.0, "tw": 0.0}
+    stack: list[dict] = []
     for i, ins in enumerate(instructions):
         if isinstance(ins, pikepdf.ContentStreamInlineImage):
             continue
-        op = str(ins.operator)
-        if op == "q":
-            stack.append(font)
-        elif op == "Q" and stack:
-            font = stack.pop()
-        elif op == "Tf" and ins.operands:
-            font = str(ins.operands[0])
-        elif op in SHOW_OPS:
-            result.append((i, font))
+        op, args = str(ins.operator), list(ins.operands)
+        try:
+            if op == "q":
+                stack.append(dict(state))
+            elif op == "Q" and stack:
+                state = stack.pop()
+            elif op == "Tf" and len(args) == 2:
+                state["font"], state["size"] = str(args[0]), float(args[1])
+            elif op == "Tc" and args:
+                state["tc"] = float(args[0])
+            elif op == "Tw" and args:
+                state["tw"] = float(args[0])
+            elif op == '"' and len(args) == 3:
+                state["tw"], state["tc"] = float(args[0]), float(args[1])
+        except (TypeError, ValueError):
+            continue
+        if op in SHOW_OPS and any(isinstance(x, bytes) and x for x in _strings(ins)):
+            result.append(_Show(i, state["font"], state["size"], state["tc"], state["tw"]))
     return result
 
 
-def _replace_show(ins, payload: bytes) -> pikepdf.ContentStreamInstruction:
+def _widths(font: pikepdf.Object | None):
+    """Funzione codice → larghezza (millesimi del corpo) e lunghezza dei codici, oppure None se non si sa."""
+    if font is None:
+        return None
+    if font.get("/Subtype") == pikepdf.Name.Type0:
+        try:
+            descendant = font.DescendantFonts[0]
+        except (AttributeError, IndexError, KeyError):
+            return None
+        default = float(descendant.get("/DW", 1000))
+        table: dict[int, float] = {}
+        w = list(descendant.get("/W", []))
+        k = 0
+        while k < len(w):
+            first = int(w[k])
+            if k + 1 < len(w) and isinstance(w[k + 1], pikepdf.Array):
+                for j, width in enumerate(w[k + 1]):
+                    table[first + j] = float(width)
+                k += 2
+            elif k + 2 < len(w):
+                for code in range(first, int(w[k + 1]) + 1):
+                    table[code] = float(w[k + 2])
+                k += 3
+            else:
+                break
+        return (lambda code: table.get(code, default)), 2
+    if font.get("/Subtype") == pikepdf.Name.Type3:
+        return None
+    widths = font.get("/Widths")
+    if widths is not None:
+        first = int(font.get("/FirstChar", 0))
+        values = [float(v) for v in widths]
+        descriptor = font.get("/FontDescriptor")
+        missing = float(descriptor.get("/MissingWidth", 0)) if descriptor is not None else 0.0
+        return (lambda code: values[code - first] if 0 <= code - first < len(values) else missing), 1
+    base = str(font.get("/BaseFont", "")).lstrip("/")
+    try:  # i 14 font standard non hanno /Widths: le metriche le ha reportlab
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+
+        stringWidth("a", base, 1000)
+    except (KeyError, ValueError):
+        return None
+    return (lambda code: stringWidth(bytes([code]).decode("cp1252", "replace"), base, 1000)), 1
+
+
+def _advance(widths, items: list, show: _Show) -> float | None:
+    """Di quanto avanza la posizione di scrittura (spazio del testo), come prescrive la specifica PDF."""
+    if widths is None or not show.size:
+        return None
+    width_of, code_len = widths
+    total = 0.0
+    for item in items:
+        if isinstance(item, float):
+            total -= item / 1000 * show.size
+            continue
+        for k in range(0, len(item) - code_len + 1, code_len):
+            code = int.from_bytes(item[k:k + code_len], "big")
+            total += width_of(code) / 1000 * show.size + show.char_spacing
+            if code_len == 1 and code == 32:
+                total += show.word_spacing
+    return total
+
+
+def _replacement(ins, show: _Show, payload: bytes, widths) -> list:
+    """Le istruzioni che prendono il posto di quella originale, lasciando dov'erano i pezzi che seguono."""
     op = str(ins.operator)
-    string = pikepdf.String(payload)
+    prefix: list = []
     if op == '"':  # " = spaziatura + a capo + testo: si conservano spaziatura e a capo
-        return pikepdf.ContentStreamInstruction([ins.operands[0], ins.operands[1], string], pikepdf.Operator('"'))
-    if op == "'":  # ' = a capo + testo
-        return pikepdf.ContentStreamInstruction([string], pikepdf.Operator("'"))
-    return pikepdf.ContentStreamInstruction([string], pikepdf.Operator("Tj"))
+        prefix = [pikepdf.ContentStreamInstruction([ins.operands[0]], pikepdf.Operator("Tw")),
+                  pikepdf.ContentStreamInstruction([ins.operands[1]], pikepdf.Operator("Tc")),
+                  pikepdf.ContentStreamInstruction([], pikepdf.Operator("T*"))]
+    elif op == "'":  # ' = a capo + testo
+        prefix = [pikepdf.ContentStreamInstruction([], pikepdf.Operator("T*"))]
+    body = []
+    if payload:
+        body.append(pikepdf.ContentStreamInstruction([pikepdf.String(payload)], pikepdf.Operator("Tj")))
+    old = _advance(widths, _strings(ins), show)
+    new = _advance(widths, [payload], show) if payload else 0.0
+    if old is not None and new is not None and abs(old - new) > 1e-6:
+        # Spostamento senza scrivere nulla (TJ con solo un numero): il testo dopo resta dov'era.
+        shift = -(old - new) / show.size * 1000
+        body.append(pikepdf.ContentStreamInstruction([pikepdf.Array([round(shift, 3)])], pikepdf.Operator("TJ")))
+    return prefix + body
 
 
 _FONTS: dict[bool, str] = {}
@@ -373,9 +476,10 @@ def _apply(data: bytes, page_no: int, changes: list[_Change], password: str | No
             if len(shows) != len(infos):
                 raise CliError("struttura del testo di questa pagina non gestita: nessuna modifica fatta")
             fonts = page.obj.get("/Resources", {}).get("/Font", {})
+            replaced: dict[int, list] = {}
             for change in changes:
-                position, font_name = shows[change.index]
-                font = fonts.get(font_name) if font_name else None
+                show = shows[change.index]
+                font = fonts.get(show.font) if show.font else None
                 payload = _encode(font, change.new_text) if change.new_text.strip() else b""
                 if payload is None:  # lettere mancanti nel font: si svuota il pezzo e si riscrive sopra
                     payload = b""
@@ -384,8 +488,11 @@ def _apply(data: bytes, page_no: int, changes: list[_Change], password: str | No
                     expected[change.index] = ""
                 else:
                     expected[change.index] = change.new_text
-                instructions[position] = _replace_show(instructions[position], payload)
-            page.obj.Contents = pdf.make_stream(pikepdf.unparse_content_stream(instructions))
+                replaced[show.position] = _replacement(instructions[show.position], show, payload, _widths(font))
+            rebuilt = []
+            for i, ins in enumerate(instructions):
+                rebuilt.extend(replaced.get(i, [ins]))
+            page.obj.Contents = pdf.make_stream(pikepdf.unparse_content_stream(rebuilt))
         if overlays:
             _append_text(pdf, page, overlays)
             expected += [text for _, text in overlays]  # in fondo al flusso, come pezzi di testo modificabili

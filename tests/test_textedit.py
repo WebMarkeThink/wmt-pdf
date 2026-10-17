@@ -225,3 +225,47 @@ def test_added_text_is_editable_afterwards(capsys, tmp_path, letter):
     code, _, err = run(capsys, "replace", added, "provvisoria", "definitiva", "-o", out)
     assert code == 0, err
     assert "Nota definitiva" in text_of(out)
+
+
+def test_repeated_edits_on_same_page(capsys, tmp_path, embedded_font_pdf, letter):
+    """Regressione: dopo una riscrittura con font di sistema le modifiche successive venivano rifiutate."""
+    a, b, c = tmp_path / "a.pdf", tmp_path / "b.pdf", tmp_path / "c.pdf"
+    assert run(capsys, "replace", embedded_font_pdf, "Mario Rossi", "Zoë Bianchi", "-o", a)[0] == 0
+    code, _, err = run(capsys, "replace", a, "Zoë Bianchi", "Zoë Bianchi Verdi", "-o", b)
+    assert code == 0, err
+    code, _, err = run(capsys, "edittext", b, "--page", "1", "--at", "100,705", "--text", "Anna", "-o", c)
+    assert code == 0, err
+    assert text_of(c).strip() == "Anna"
+
+
+@pytest.fixture
+def same_line(tmp_path):
+    """Due pezzi sulla stessa riga, il secondo posizionato solo dall'avanzamento del primo (niente Td)."""
+    path = tmp_path / "riga.pdf"
+    c = canvas.Canvas(str(path))
+    c.setFont("Helvetica", 12)
+    c.drawString(72, 700, "x")  # crea la risorsa del font
+    c.showPage()
+    c.save()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        page = pdf.pages[0]
+        name = next(iter(page.obj.Resources.Font.keys()))
+        stream = f"BT {name} 12 Tf 72 600 Td (Codice Cliente: ) Tj (893442) Tj ET".encode()
+        page.obj.Contents = pdf.make_stream(stream)
+        pdf.save(path)
+    return path
+
+
+def _bbox(capsys, path, text):
+    _, listing, _ = run(capsys, "textobjects", path, "--page", "1", "--json")
+    return next(o["bbox"] for o in json.loads(listing) if o["text"] == text)
+
+
+@pytest.mark.parametrize("new_text", ["Cod.: ", "Codice cliente numero: ", " "])
+def test_following_piece_stays_in_place(capsys, tmp_path, same_line, new_text):
+    before = _bbox(capsys, same_line, "893442")
+    out = tmp_path / "riga_mod.pdf"
+    code, _, err = run(capsys, "edittext", same_line, "--page", "1", "--index", "0", "--text", new_text, "-o", out)
+    assert code == 0, err
+    after = _bbox(capsys, out, "893442")
+    assert abs(after[0] - before[0]) < 0.5  # il numero non si è spostato
