@@ -38,7 +38,13 @@ Un mix tra Acrobat Pro e Stirling PDF, con interfaccia ad icone. Si parte dalla 
    Per sistema: Windows con driver di stampa (Microsoft Print to PDF non basta per l'integrazione; serve un port monitor o un driver v4 proprio), macOS con una voce del menu PDF o una coda CUPS, Linux con una coda CUPS. È la parte più legata al sistema: va progettata a sé, con firma del driver su Windows.
 6. **Interfaccia grafica**: Tauri (Windows, macOS, Linux), griglia di funzioni ad icone, visualizzatore PDF.js con modifica di testo e annotazioni; usa lo stesso motore della CLI.
 
-Da verificare prima delle fasi 2 e 3: le conversioni da Office richiedono LibreOffice in modalità senza interfaccia (MPL) da installare a parte, oppure librerie dedicate per ciascun formato. La modifica del testo già presente in un PDF (stile Acrobat) è la funzione più difficile senza MuPDF: valutare PDFium più pdf-lib (MIT) nell'interfaccia.
+Fase 2, scelta del 2026-10-17: librerie dedicate per ogni formato, niente LibreOffice. pikepdf (MPL) per le operazioni;
+mammoth (BSD) + xhtml2pdf (Apache) per Word; openpyxl, python-pptx, markdown, odfpy (opzione Apache) per gli altri formati.
+xhtml2pdf porta svglib, LGPL-3: compatibile anche con un prodotto commerciale se usata senza modificarla, da ricordare
+quando si sceglie la licenza. Esclusi: pdf2docx (dipende da PyMuPDF, AGPL), extract-msg (.msg, GPL), WeasyPrint (GTK su Windows).
+Rimandati: PDF/A, larghezze di colonna da Excel, rimozione di filigrane non marcate.
+
+Da verificare prima della fase 3: le conversioni da Office richiedono LibreOffice in modalità senza interfaccia (MPL) da installare a parte, oppure librerie dedicate per ciascun formato. La modifica del testo già presente in un PDF (stile Acrobat) è la funzione più difficile senza MuPDF: valutare PDFium più pdf-lib (MIT) nell'interfaccia.
 
 ## Regole della CLI per agenti
 

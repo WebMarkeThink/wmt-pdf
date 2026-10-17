@@ -13,7 +13,7 @@ def available() -> bool:
 
 
 @lru_cache(maxsize=4)
-def _engine(lang: str):
+def engine(lang: str):
     from rapidocr import RapidOCR
 
     # Codici dei modelli PP-OCRv6: it, en, de, fr, es, ch, ...
@@ -24,7 +24,7 @@ def page_text(page, lang: str = "it") -> str:
     import numpy as np
 
     image = page.render(scale=OCR_DPI / 72).to_pil().convert("RGB")
-    result = _engine(lang)(np.asarray(image))
+    result = engine(lang)(np.asarray(image))
     if result.txts is None or result.boxes is None:
         return ""
     return _lines(list(zip(result.boxes, result.txts)))

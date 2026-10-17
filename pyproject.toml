@@ -13,12 +13,22 @@ dependencies = [
     "asn1crypto>=1.5.1,<2",
     "cryptography>=44",
     "pyhanko>=0.37,<0.38",
+    "pikepdf>=10.17,<11",
 ]
 
 [project.optional-dependencies]
 ocr = [
     "rapidocr>=3.10,<4",
     "onnxruntime>=1.20",
+]
+convert = [
+    "mammoth>=1.13,<2",
+    "markdown>=3.11,<4",
+    "odfpy>=1.4.1,<2",
+    "openpyxl>=3.1.5,<4",
+    "python-docx>=1.2,<2",
+    "python-pptx>=1.0.2,<2",
+    "xhtml2pdf>=0.2.26,<0.3",
 ]
 
 [project.scripts]

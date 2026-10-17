@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -61,6 +62,36 @@ def load_source(path: str | Path) -> Source:
     if b"%PDF" in data[:1024]:  # PDF con qualche byte spurio in testa
         return Source(p, data)
     raise CliError(f"non è un PDF né un p7m: {p.name}")
+
+
+def resolve_password(args) -> str | None:
+    """--password, oppure --password-env NOME (non resta nella cronologia della shell)."""
+    env = getattr(args, "password_env", None)
+    if env:
+        value = os.environ.get(env)
+        if value is None:
+            raise CliError(f"variabile d'ambiente {env} non impostata")
+        return value
+    return getattr(args, "password", None)
+
+
+def check_target(target: Path, source: Path | list[Path], force: bool) -> None:
+    """Mai sovrascrivere un file di partenza; un file esistente solo con --force."""
+    sources = source if isinstance(source, list) else [source]
+    if any(_same(target, s) for s in sources):
+        raise CliError("la destinazione coincide con il file di partenza: scegli un altro nome")
+    if target.exists() and not force:
+        raise CliError(f"{target} esiste già: usa --force per sovrascriverlo")
+
+
+def _same(a: Path, b: Path) -> bool:
+    """Stesso file anche tramite collegamenti (hard link compresi)."""
+    if a.resolve() == b.resolve():
+        return True
+    try:
+        return a.exists() and b.exists() and os.path.samefile(a, b)
+    except OSError:
+        return False
 
 
 def p7m_banner(source: Source) -> str | None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -20,7 +21,14 @@ from wmt_pdf.extract import (
     to_markdown,
 )
 from wmt_pdf.pages import parse_pages
-from wmt_pdf.source import CliError, load_source, p7m_banner, read_file
+from wmt_pdf.source import (
+    CliError,
+    check_target,
+    load_source,
+    p7m_banner,
+    read_file,
+    resolve_password,
+)
 
 EXIT_OK, EXIT_ERROR, EXIT_INVALID_SIGNATURE = 0, 1, 2
 MIN_CUT_CHARS = 200  # anche col budget esaurito si avanza, così "continua" non gira a vuoto
@@ -48,6 +56,15 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"wpdf: {exc}", file=sys.stderr)
         return EXIT_ERROR
+    except KeyboardInterrupt:
+        return 130
+    except Exception as exc:
+        if os.environ.get("WPDF_DEBUG"):
+            raise
+        detail = str(exc).strip().splitlines()[0][:300] if str(exc).strip() else ""
+        print(f"wpdf: errore ({type(exc).__name__}){': ' + detail if detail else ''}", file=sys.stderr)
+        print("wpdf: imposta WPDF_DEBUG=1 per i dettagli", file=sys.stderr)
+        return EXIT_ERROR
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
         p = sub.add_parser(name, help=help_text, description=help_text)
         p.add_argument("file", help="PDF oppure .p7m")
         if pdf:
-            p.add_argument("--password", help="password del PDF")
+            add_password_args(p)
         p.set_defaults(func=func)
         return p
 
@@ -103,7 +120,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = add("signatures", cmd_signatures, "Firme incorporate nel PDF (PAdES) e loro integrità")
     p.add_argument("--json", action="store_true")
+
+    from wmt_pdf.cli_ops import register
+
+    register(sub)
     return parser
+
+
+def add_password_args(p: argparse.ArgumentParser) -> None:
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--password", help="password del PDF")
+    group.add_argument("--password-env", metavar="VARIABILE", help="legge la password da una variabile d'ambiente")
 
 
 # --- comandi --------------------------------------------------------------
@@ -111,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _open(args):
     source = load_source(args.file)
-    return source, source.open(getattr(args, "password", None))
+    return source, source.open(resolve_password(args))
 
 
 def cmd_info(args) -> int:
@@ -182,7 +209,7 @@ def cmd_info(args) -> int:
 
 def cmd_text(args) -> int:
     source, doc = _open(args)
-    extractor = Extractor(doc, source.data, tables=not args.no_tables, password=args.password)
+    extractor = Extractor(doc, source.data, tables=not args.no_tables, password=resolve_password(args))
     try:
         numbers = parse_pages(args.pages, len(doc))
         pages, removed = extractor.pages(numbers, keep_headers=args.keep_headers, ocr=args.ocr, lang=args.lang)
@@ -283,7 +310,7 @@ def _next_spec(truncated_at, numbers: list[int]) -> str:
 
 def cmd_tables(args) -> int:
     source, doc = _open(args)
-    extractor = Extractor(doc, source.data, password=args.password)
+    extractor = Extractor(doc, source.data, password=resolve_password(args))
     found = 0
     try:
         for n in parse_pages(args.pages, len(doc)):
@@ -379,7 +406,7 @@ def cmd_p7m(args) -> int:
     except P7mError as exc:
         raise CliError(str(exc)) from None
     if args.output:
-        _check_target(Path(args.output), Path(args.file), args.force)
+        check_target(Path(args.output), Path(args.file), args.force)
         Path(args.output).write_bytes(result.content)
     if args.json:
         print(json.dumps(_p7m_summary(result) | {"saved_to": args.output}, ensure_ascii=False, indent=1, default=str))
@@ -445,13 +472,6 @@ def cmd_signatures(args) -> int:
 
 
 # --- utilità --------------------------------------------------------------
-
-
-def _check_target(target: Path, source: Path, force: bool) -> None:
-    if target.resolve() == source.resolve():
-        raise CliError("la destinazione coincide con il file di partenza: scegli un altro nome")
-    if target.exists() and not force:
-        raise CliError(f"{target} esiste già: usa --force per sovrascriverlo")
 
 
 def _p7m_summary(result) -> dict:
