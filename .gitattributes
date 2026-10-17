@@ -1,0 +1,2 @@
+# File di terze parti: byte identici all'originale (niente conversione degli a capo)
+src/wmt_pdf/gui/static/vendor/** -text
