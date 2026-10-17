@@ -20,7 +20,7 @@ export { pdfjs };
 const NOT_IN_LIST = new Set(["merge", "convert", "p7m", "edittext", "addtext", "replace", "highlight", "rotate", "pages"]);
 
 const doc = {
-  state: null, pdf: null, page: 1, scale: 1.25, mode: "pointer", viewport: null, selected: null, reselect: null, boxesRun: 0,
+  state: null, pdf: null, page: 1, scale: 1.25, mode: "pointer", viewport: null, selected: null, reselect: null, boxesRun: 0, drawRun: 0,
   task: null, thumbsRun: 0, busy: false, dialogTool: null, dialogFiles: {},
 };
 let ctx = null;
@@ -90,8 +90,15 @@ async function load(state) {
 async function drawPage() {
   if (!doc.pdf) return;
   closePopover();
-  if (doc.task) doc.task.cancel();
+  const run = ++doc.drawRun;
+  const previous = doc.task;
+  if (previous) {
+    // PDF.js 6 non ridisegna sullo stesso canvas finché il disegno precedente non si è davvero fermato.
+    previous.cancel();
+    await previous.promise.catch(() => {});
+  }
   const page = await doc.pdf.getPage(doc.page);
+  if (run !== doc.drawRun) return; // nel frattempo è partito un disegno più recente
   const viewport = page.getViewport({ scale: doc.scale });
   doc.viewport = viewport;
   const ratio = window.devicePixelRatio || 1;
@@ -105,14 +112,15 @@ async function drawPage() {
   holder.style.height = canvas.style.height;
   const context = canvas.getContext("2d");
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  doc.task = page.render({ canvasContext: context, viewport, annotationMode: pdfjs.AnnotationMode.ENABLE });
+  const task = page.render({ canvasContext: context, viewport, annotationMode: pdfjs.AnnotationMode.ENABLE });
+  doc.task = task;
   try {
-    await doc.task.promise;
+    await task.promise;
   } catch (error) {
     if (error?.name !== "RenderingCancelledException") throw error;
     return;
   } finally {
-    doc.task = null;
+    if (doc.task === task) doc.task = null;
   }
   $("doc-page").textContent = `${doc.page} / ${doc.pdf.numPages}`;
   $("doc-zoom").textContent = `${Math.round(doc.scale * 100)}%`;
