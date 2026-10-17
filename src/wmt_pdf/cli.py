@@ -129,6 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     register_sign(sub)
 
+    from wmt_pdf.cli_text import register as register_text
+
+    register_text(sub)
+
     p = sub.add_parser("gui", help="Apre l'interfaccia grafica", description="Apre l'interfaccia grafica")
     p.add_argument("--port", type=int, default=0, help="porta locale (di default una libera)")
     p.add_argument("--no-window", action="store_true", help="non aprire finestra né browser (solo server)")

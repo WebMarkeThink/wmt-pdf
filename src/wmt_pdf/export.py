@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import html as htmllib
+import json
 import re
 from pathlib import Path
 
 from wmt_pdf.extract import Extractor, PageText
 from wmt_pdf.source import CliError, Source
 
-TEXT_FORMATS = {"docx", "xlsx", "html", "md", "txt"}
+TEXT_FORMATS = {"docx", "xlsx", "html", "md", "txt", "json", "xml"}
 IMAGE_FORMATS = {"png", "jpg", "tiff"}
 
 # Caratteri che XML (quindi Word ed Excel) non accetta: capitano nel testo estratto dai PDF.
@@ -49,8 +50,15 @@ def export(source: Source, fmt: str, target: Path, *, password: str | None = Non
         return export_images(source, fmt, target, dpi=dpi, password=password)
     if fmt not in TEXT_FORMATS:
         raise CliError(f"formato di esportazione sconosciuto: {fmt}")
-    pages = extract_pages(source, password, ocr)
     target.parent.mkdir(parents=True, exist_ok=True)
+    if fmt in ("json", "xml"):
+        data = structure(source, password, ocr)
+        if fmt == "json":
+            target.write_text(json.dumps(data, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        else:
+            _to_xml(data).write(target, encoding="utf-8", xml_declaration=True)
+        return [target]
+    pages = extract_pages(source, password, ocr)
     if fmt == "docx":
         _to_docx(pages, target, source.name)
     elif fmt == "xlsx":
@@ -62,6 +70,106 @@ def export(source: Source, fmt: str, target: Path, *, password: str | None = Non
     else:
         target.write_text("\n\n\f".join(p.text for p in pages) + "\n", encoding="utf-8")
     return [target]
+
+
+def _segments(doc, number: int) -> list[dict]:
+    """Pezzi di testo con il riquadro in punti PDF (origine in basso a sinistra), come li vede PDFium."""
+    page = doc[number - 1]
+    textpage = page.get_textpage()
+    try:
+        result = []
+        for i in range(textpage.count_rects()):
+            left, bottom, right, top = textpage.get_rect(i)
+            text = textpage.get_text_bounded(left, bottom, right, top).strip()
+            if text:
+                result.append({"text": text, "bbox": [round(left, 2), round(bottom, 2), round(right, 2), round(top, 2)]})
+        return result
+    finally:
+        textpage.close()
+        page.close()
+
+
+def structure(source: Source, password: str | None = None, ocr: str = "auto") -> dict:
+    """Tutto il documento in una struttura stabile: metadati, pagine (testo, righe, tabelle), campi, annotazioni."""
+    from wmt_pdf.forms import list_fields
+    from wmt_pdf.marks import list_annotations
+    from wmt_pdf.ops import open_pdf, read_outline
+    from wmt_pdf.pades import count_signatures
+
+    pages = extract_pages(source, password, ocr)
+    doc = source.open(password)
+    try:
+        meta = doc.get_metadata_dict(skip_empty=True)
+        page_data = []
+        for item in pages:
+            width, height = doc.get_page_size(item.page - 1)
+            page_data.append({
+                "number": item.page, "width": round(width, 2), "height": round(height, 2),
+                "text": item.text, "ocr": item.ocr, "images": item.images, "note": item.note,
+                "tables": item.tables, "lines": _segments(doc, item.page) if not item.ocr else [],
+            })
+    finally:
+        doc.close()
+    with open_pdf(source.data, password) as pdf:
+        outline = read_outline(pdf)
+
+    def tree(items):
+        return [{"title": o.title, "page": o.page + 1 if o.page is not None else None, "children": tree(o.children)}
+                for o in items]
+
+    return {
+        "file": source.name,
+        "page_count": len(pages),
+        "metadata": meta,
+        "pages": page_data,
+        "fields": [f.__dict__ for f in list_fields(source.data, password)],
+        "annotations": [a.__dict__ for a in list_annotations(source.data, password=password)],
+        "outline": tree(outline),
+        "signatures": count_signatures(source.data),
+    }
+
+
+def _to_xml(data: dict):
+    import xml.etree.ElementTree as ET
+
+    def text(value) -> str:
+        return xml_safe("" if value is None else str(value))
+
+    root = ET.Element("document", file=text(data["file"]), page_count=str(data["page_count"]),
+                      signatures=str(data["signatures"]))
+    meta = ET.SubElement(root, "metadata")
+    for name, value in data["metadata"].items():
+        ET.SubElement(meta, "item", name=text(name)).text = text(value)
+    for page in data["pages"]:
+        node = ET.SubElement(root, "page", number=str(page["number"]), width=str(page["width"]),
+                             height=str(page["height"]), ocr=str(page["ocr"]).lower(), images=str(page["images"]))
+        ET.SubElement(node, "text").text = text(page["text"])
+        lines = ET.SubElement(node, "lines")
+        for seg in page["lines"]:
+            ET.SubElement(lines, "line", bbox=" ".join(str(v) for v in seg["bbox"])).text = text(seg["text"])
+        for table in page["tables"]:
+            tnode = ET.SubElement(node, "table")
+            for row in table:
+                rnode = ET.SubElement(tnode, "row")
+                for cell in row:
+                    ET.SubElement(rnode, "cell").text = text(cell)
+    fields = ET.SubElement(root, "fields")
+    for f in data["fields"]:
+        fnode = ET.SubElement(fields, "field", name=text(f["name"]), type=text(f["type"]), page=text(f["page"]))
+        fnode.text = text(f["value"])
+    annots = ET.SubElement(root, "annotations")
+    for a in data["annotations"]:
+        anode = ET.SubElement(annots, "annotation", type=text(a["type"]), page=str(a["page"]))
+        anode.text = text(a["contents"] or a["text"])
+
+    def outline(parent, items):
+        for item in items:
+            onode = ET.SubElement(parent, "bookmark", title=text(item["title"]), page=text(item["page"]))
+            outline(onode, item["children"])
+
+    outline(ET.SubElement(root, "outline"), data["outline"])
+    ET.indent(root)
+    return ET.ElementTree(root)
 
 
 def _blocks(page: PageText):

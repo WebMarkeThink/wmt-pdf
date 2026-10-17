@@ -184,3 +184,123 @@ def test_invalid_choice_is_refused_by_catalog(server, text_pdf):
     a = upload(server, text_pdf)
     status, _, _ = call(server, "POST", "/api/run", {"tool": "rotate", "inputs": [a], "options": {"angle": "45"}})
     assert status == 400  # 45 non è tra le scelte: non arriva nemmeno a wpdf
+
+
+# --- documenti aperti ------------------------------------------------------------------------
+
+
+@pytest.fixture
+def cache(tmp_path, monkeypatch):
+    monkeypatch.setenv("WPDF_CACHE_DIR", str(tmp_path / "cache"))
+
+
+def post(srv, path, body):
+    status, raw, _ = call(srv, "POST", path, body)
+    return status, json.loads(raw)
+
+
+def test_document_edit_undo_redo(server, text_pdf, cache):
+    file_id = upload(server, text_pdf)
+    status, doc = post(server, "/api/doc/open", {"file_id": file_id})
+    assert status == 200 and doc["pages"] == 3 and not doc["can_undo"] and not doc["modified"]
+    status, result = post(server, f"/api/doc/{doc['id']}/apply",
+                          {"tool": "addtext", "options": {"page": 1, "at": "72,600", "text": "Nota nuova"}})
+    assert result["code"] == 0, result
+    state = result["document"]
+    assert state["can_undo"] and state["modified"] and state["version"] == 2
+    _, objs, _ = call(server, "GET", f"/api/doc/{doc['id']}/textobjects?page=1")
+    assert any(o["text"] == "Nota nuova" for o in json.loads(objs))
+    _, state = post(server, f"/api/doc/{doc['id']}/undo", {})
+    assert state["version"] == 1 and state["can_redo"] and not state["modified"]
+    _, objs, _ = call(server, "GET", f"/api/doc/{doc['id']}/textobjects?page=1")
+    assert not any(o["text"] == "Nota nuova" for o in json.loads(objs))
+    _, state = post(server, f"/api/doc/{doc['id']}/redo", {})
+    assert state["version"] == 2
+
+
+def test_document_failed_edit_keeps_version(server, text_pdf, cache):
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    _, result = post(server, f"/api/doc/{doc['id']}/apply",
+                     {"tool": "edittext", "options": {"page": 1, "at": "500,50", "text": "x"}})
+    assert result["code"] == 1 and "nessun testo" in result["stderr"]
+    assert result["document"]["version"] == 1
+
+
+def test_browser_mode_cannot_use_paths(server, text_pdf, cache):
+    status, body = post(server, "/api/doc/open", {"path": str(text_pdf)})
+    assert status == 400 and "finestra" in body["error"]
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    status, body = post(server, f"/api/doc/{doc['id']}/save", {"path": str(text_pdf.parent / "x.pdf")})
+    assert status == 400
+
+
+def test_desktop_open_save_and_recent(server, tmp_path, text_pdf, cache):
+    import shutil
+
+    server.desktop = True
+    original = tmp_path / "originale.pdf"
+    shutil.copy(text_pdf, original)
+    server.documents.allow(str(original))  # come se l'utente l'avesse scelto nella finestra «Apri»
+    server.documents.allow(str(tmp_path / "copia"))
+    _, doc = post(server, "/api/doc/open", {"path": str(original)})
+    assert doc["path"] == str(original)
+    _, result = post(server, f"/api/doc/{doc['id']}/apply", {"tool": "rotate", "options": {"angle": "90"}})
+    assert result["code"] == 0
+    assert original.read_bytes() == text_pdf.read_bytes()  # l'originale cambia solo con «Salva»
+    copy = tmp_path / "copia"
+    _, state = post(server, f"/api/doc/{doc['id']}/save", {"path": str(copy)})
+    assert state["name"] == "copia.pdf" and not state["modified"]
+    with pikepdf.open(tmp_path / "copia.pdf") as pdf:
+        assert int(pdf.pages[0].Rotate) == 90
+    _, body, _ = call(server, "GET", "/api/recent")
+    names = [r["name"] for r in json.loads(body)["files"]]
+    assert names[:2] == ["copia.pdf", "originale.pdf"]
+
+
+def test_document_unknown(server):
+    status, _ = post(server, "/api/doc/abc/undo", {})
+    assert status == 400
+
+
+def test_desktop_paths_must_be_chosen(server, tmp_path, text_pdf, cache):
+    server.desktop = True
+    status, body = post(server, "/api/doc/open", {"path": str(text_pdf)})
+    assert status == 400 and "non scelto" in body["error"]
+    status, body = post(server, "/api/doc/open", {"path": r"\\127.0.0.9\share\a.pdf"})
+    assert status == 400 and "rete" in body["error"]
+    secret = tmp_path / "segreto.txt"
+    secret.write_text("x", encoding="utf-8")
+    server.documents.allow(str(secret))
+    status, body = post(server, "/api/doc/open", {"path": str(secret)})
+    assert status == 400 and "PDF" in body["error"]
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    status, body = post(server, f"/api/doc/{doc['id']}/save", {"path": str(tmp_path / "altro.pdf")})
+    assert status == 400 and not (tmp_path / "altro.pdf").exists()
+
+
+def test_p7m_is_never_overwritten(server, tmp_path, p7m_file, cache):
+    import shutil
+
+    server.desktop = True
+    signed = tmp_path / "contratto.pdf.p7m"
+    shutil.copy(p7m_file, signed)
+    server.documents.allow(str(signed))
+    _, doc = post(server, "/api/doc/open", {"path": str(signed)})
+    post(server, f"/api/doc/{doc['id']}/apply", {"tool": "rotate", "options": {"angle": "90"}})
+    status, body = post(server, f"/api/doc/{doc['id']}/save", {})
+    assert status == 400 and "Salva con nome" in body["error"]
+    assert signed.read_bytes() == p7m_file.read_bytes()
+
+
+def test_modified_after_undo_and_new_edit(server, tmp_path, text_pdf, cache):
+    server.desktop = True
+    target = tmp_path / "salvato.pdf"
+    server.documents.allow(str(target))
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    did = doc["id"]
+    post(server, f"/api/doc/{did}/apply", {"tool": "rotate", "options": {"angle": "90"}})
+    _, state = post(server, f"/api/doc/{did}/save", {"path": str(target)})
+    assert not state["modified"]
+    post(server, f"/api/doc/{did}/undo", {})
+    _, result = post(server, f"/api/doc/{did}/apply", {"tool": "rotate", "options": {"angle": "180"}})
+    assert result["document"]["modified"] is True

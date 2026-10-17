@@ -103,9 +103,9 @@ def register(sub) -> None:
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=cmd_annotations)
 
-    p = add("export", cmd_export, "Esporta in docx, xlsx, html, md, txt, png, jpg o tiff",
+    p = add("export", cmd_export, "Esporta in docx, xlsx, html, md, txt, json, xml, png, jpg o tiff",
             output="file di destinazione (cartella per png e jpg)")
-    p.add_argument("--to", required=True, choices=["docx", "xlsx", "html", "md", "txt", "png", "jpg", "tiff"])
+    p.add_argument("--to", required=True, choices=["docx", "xlsx", "html", "md", "txt", "json", "xml", "png", "jpg", "tiff"])
     p.add_argument("--dpi", type=int, default=150, help="per le immagini")
     p.add_argument("--ocr", choices=["auto", "never", "force"], default="auto")
 

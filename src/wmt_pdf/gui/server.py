@@ -22,9 +22,12 @@ import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 from urllib.parse import unquote, urlparse
 
+from wmt_pdf.gui.documents import DocumentStore, forget, recent
 from wmt_pdf.gui.tools import TOOLS, build_args, catalog
+from wmt_pdf.source import CliError
 
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 500 * 1024 * 1024
@@ -48,16 +51,72 @@ class GuiServer(ThreadingHTTPServer):
         self.uploaded = 0
         self.lock = threading.Lock()  # wpdf scrive su stdout: un comando alla volta
         (workdir / "file").mkdir(parents=True, exist_ok=True)
+        self.documents = DocumentStore(self)
+        self.desktop = False  # True nella finestra nativa: si possono aprire e salvare file per percorso
 
     def register(self, path: Path) -> dict:
         file_id = uuid.uuid4().hex
         self.files[file_id] = path
         return {"id": file_id, "name": path.name, "size": path.stat().st_size, "kind": _kind(path)}
 
+    def discard(self, file_id: str) -> None:
+        """Toglie un file prodotto che non serve più (versioni annullate e poi sostituite)."""
+        path = self.files.pop(file_id, None)
+        if path is not None and path.is_relative_to(self.workdir):
+            path.unlink(missing_ok=True)
+
     def resolve(self, file_id: str) -> Path:
         if not isinstance(file_id, str) or not ID.fullmatch(file_id) or file_id not in self.files:
             raise ValueError("file sconosciuto")
         return self.files[file_id]
+
+    def execute(self, tool_id, raw_inputs, raw_options) -> dict:
+        """Esegue uno strumento del catalogo; ValueError per richieste non valide."""
+        tool = TOOLS.get(str(tool_id))
+        if tool is None:
+            raise ValueError("strumento sconosciuto")
+        if not isinstance(raw_inputs, list) or not isinstance(raw_options, dict):
+            raise ValueError("richiesta non valida")  # noqa: TRY004 - diventa una risposta 400
+        inputs = [self.resolve(i) for i in raw_inputs]
+        options = dict(raw_options)
+        for opt in tool.options:  # le opzioni di tipo file arrivano come id
+            if opt.kind == "file" and options.get(opt.name):
+                options[opt.name] = self.resolve(options[opt.name])
+        outdir = self.workdir / "file" / uuid.uuid4().hex
+        outdir.mkdir(parents=True)
+        argv, env = build_args(tool, inputs, options, outdir)
+        code, stdout, stderr = self.invoke(argv, env)
+        # Con un errore si scartano anche i file scritti a metà; 2 e 3 (verifica firme) non sono errori.
+        produced = sorted(p for p in outdir.rglob("*") if p.is_file()) if code in (0, 2, 3) else []
+        outputs = [self.register(p) for p in produced]
+        if not outputs:
+            shutil.rmtree(outdir, ignore_errors=True)
+        # Nei messaggi l'utente vede i nomi dei file, non i percorsi della cartella di lavoro.
+        stdout = stdout.replace(str(outdir) + os.sep, "").replace(str(self.workdir), "…")
+        stderr = stderr.replace(str(outdir) + os.sep, "").replace(str(self.workdir), "…")
+        return {"code": code, "stdout": stdout, "stderr": stderr, "outputs": outputs}
+
+    def invoke(self, argv: list[str], env: dict[str, str]) -> tuple[int, str, str]:
+        from wmt_pdf.cli import main
+
+        with self.lock:
+            # Le password restano nell'ambiente solo per la durata del comando (un comando alla volta).
+            for key, value in env.items():
+                os.environ[key] = value
+            out, err = io.StringIO(), io.StringIO()
+            try:
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    try:
+                        code = main(argv)
+                    except SystemExit:  # argparse rifiuta gli argomenti
+                        code = EXIT_USAGE
+                    except Exception as exc:  # noqa: BLE001 - l'interfaccia deve sempre ricevere una risposta
+                        print(f"wpdf: errore interno ({type(exc).__name__}): {exc}", file=err)
+                        code = 1
+            finally:
+                for key in env:
+                    os.environ.pop(key, None)
+            return code, out.getvalue(), err.getvalue()
 
 
 def _kind(path: Path) -> str:
@@ -141,6 +200,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(403, "accesso negato")
         if path == "/api/tools":
             return self._json(200, catalog())
+        if path == "/api/recent":
+            return self._json(200, {"desktop": self.server.desktop, "files": recent() if self.server.desktop else []})
+        if path.startswith("/api/doc/"):
+            return self._doc_get(path[len("/api/doc/"):])
         if path.startswith("/api/file/"):
             return self._file(unquote(path[len("/api/file/"):]))
         return self._error(404, "risorsa inesistente")
@@ -192,16 +255,29 @@ class Handler(BaseHTTPRequestHandler):
             if self.server.uploaded + length > MAX_SESSION:
                 return self._error(413, "spazio della sessione esaurito: chiudi e riapri wmt-pdf")
             return self._upload(length)
-        if path == "/api/run":
-            if length > 1024 * 1024:
-                return self._error(413, "richiesta troppo grande")
-            try:
-                request = json.loads(self.rfile.read(length) or b"{}")
-            except ValueError:
-                return self._error(400, "richiesta non valida")
-            if not isinstance(request, dict):
-                return self._error(400, "richiesta non valida")
-            return self._run(request)
+        if length > 1024 * 1024:
+            return self._error(413, "richiesta troppo grande")
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return self._error(400, "richiesta non valida")
+        if not isinstance(request, dict):
+            return self._error(400, "richiesta non valida")
+        try:
+            if path == "/api/run":
+                return self._json(200, self.server.execute(request.get("tool"), request.get("inputs") or [],
+                                                           request.get("options") or {}))
+            if path.startswith("/api/doc"):
+                return self._doc_post(path, request)
+            if path == "/api/recent/forget":
+                if not self.server.desktop:
+                    return self._error(400, "i file recenti esistono solo nella finestra di wmt-pdf")
+                forget(str(request.get("path", "")))
+                return self._json(200, {"files": recent()})
+        except ValueError as exc:
+            return self._error(400, str(exc))
+        except OSError as exc:  # disco: file bloccato, permessi, spazio
+            return self._error(400, f"operazione sul disco non riuscita: {exc.strerror or exc}")
         return self._error(404, "risorsa inesistente")
 
     def _upload(self, length: int) -> None:
@@ -220,57 +296,61 @@ class Handler(BaseHTTPRequestHandler):
         self.server.uploaded += length
         self._json(200, self.server.register(target))
 
-    def _run(self, request: dict) -> None:
-        tool = TOOLS.get(str(request.get("tool")))
-        if tool is None:
-            return self._error(400, "strumento sconosciuto")
+    # --- documenti ---
+
+    def _doc_get(self, rest: str) -> None:
+        store = self.server.documents
+        doc_id, _, action = rest.partition("/")
         try:
-            raw_inputs = request.get("inputs") or []
-            raw_options = request.get("options") or {}
-            if not isinstance(raw_inputs, list) or not isinstance(raw_options, dict):
-                raise ValueError("richiesta non valida")  # noqa: TRY004 - diventa una risposta 400, come gli altri ValueError
-            inputs = [self.server.resolve(i) for i in raw_inputs]
-            options = dict(raw_options)
-            for opt in tool.options:  # le opzioni di tipo file arrivano come id
-                if opt.kind == "file" and options.get(opt.name):
-                    options[opt.name] = self.server.resolve(options[opt.name])
-            outdir = self.server.workdir / "file" / uuid.uuid4().hex
-            outdir.mkdir(parents=True)
-            argv, env = build_args(tool, inputs, options, outdir)
-        except ValueError as exc:
+            doc = store.get(doc_id)
+            if action == "":
+                return self._json(200, store.state(doc))
+            if action == "textobjects":
+                from wmt_pdf.textedit import list_objects
+
+                query = dict(part.split("=", 1) for part in (urlparse(self.path).query or "").split("&") if "=" in part)
+                page = int(query.get("page", "1"))
+                items = list_objects(store.current(doc).read_bytes(), page)
+                return self._json(200, [o.__dict__ for o in items])
+        except (ValueError, CliError) as exc:
             return self._error(400, str(exc))
-        code, stdout, stderr = self._invoke(argv, env)
-        # Con un errore si scartano anche i file scritti a metà; 2 e 3 (verifica firme) non sono errori.
-        produced = sorted(p for p in outdir.rglob("*") if p.is_file()) if code in (0, 2, 3) else []
-        outputs = [self.server.register(p) for p in produced]
-        if not outputs:
-            shutil.rmtree(outdir, ignore_errors=True)
-        # Nei messaggi l'utente vede i nomi dei file, non i percorsi della cartella di lavoro.
-        stdout = stdout.replace(str(outdir) + os.sep, "").replace(str(self.server.workdir), "…")
-        stderr = stderr.replace(str(outdir) + os.sep, "").replace(str(self.server.workdir), "…")
-        self._json(200, {"code": code, "stdout": stdout, "stderr": stderr, "outputs": outputs})
+        return self._error(404, "risorsa inesistente")
 
-    def _invoke(self, argv: list[str], env: dict[str, str]) -> tuple[int, str, str]:
-        from wmt_pdf.cli import main
+    def _doc_post(self, path: str, request: dict) -> None:
+        with self.server.documents.lock:
+            return self._doc_post_locked(path, request)
 
-        with self.server.lock:
-            # Le password restano nell'ambiente solo per la durata del comando (un comando alla volta).
-            for key, value in env.items():
-                os.environ[key] = value
-            out, err = io.StringIO(), io.StringIO()
-            try:
-                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                    try:
-                        code = main(argv)
-                    except SystemExit:  # argparse rifiuta gli argomenti
-                        code = EXIT_USAGE
-                    except Exception as exc:  # noqa: BLE001 - l'interfaccia deve sempre ricevere una risposta
-                        print(f"wpdf: errore interno ({type(exc).__name__}): {exc}", file=err)
-                        code = 1
-            finally:
-                for key in env:
-                    os.environ.pop(key, None)
-            return code, out.getvalue(), err.getvalue()
+    def _doc_post_locked(self, path: str, request: dict) -> None:
+        store = self.server.documents
+        if path == "/api/doc/open":
+            if request.get("path"):
+                if not self.server.desktop:
+                    raise ValueError("aprire per percorso è possibile solo nella finestra di wmt-pdf")
+                doc = store.open_path(request["path"])
+            else:
+                doc = store.open_file(str(request.get("file_id", "")))
+            return self._json(200, store.state(doc))
+        doc_id, _, action = path[len("/api/doc/"):].partition("/")
+        doc = store.get(doc_id)
+        if action == "apply":
+            result = self.server.execute(request.get("tool"), [doc.versions[doc.index]], request.get("options") or {})
+            pdfs = [o for o in result["outputs"] if o["kind"] == "pdf"]
+            if result["code"] == 0 and len(pdfs) == 1:
+                store.push(doc, pdfs[0]["id"])  # una modifica del documento: diventa la nuova versione
+                result["outputs"] = []
+            result["document"] = store.state(doc)
+            return self._json(200, result)
+        if action == "undo":
+            store.undo(doc)
+        elif action == "redo":
+            store.redo(doc)
+        elif action == "save":
+            if not self.server.desktop and (request.get("path") or doc.path):
+                raise ValueError("salvare su disco è possibile solo nella finestra di wmt-pdf: usa «Scarica»")
+            store.save(doc, request.get("path"))
+        else:
+            return self._error(404, "azione sconosciuta")
+        return self._json(200, store.state(doc))
 
 
 def serve(workdir: Path, port: int = 0, open_window: bool = True) -> None:
@@ -285,8 +365,12 @@ def serve(workdir: Path, port: int = 0, open_window: bool = True) -> None:
             try:
                 import webview  # pywebview, extra "gui"
 
-                webview.settings["ALLOW_DOWNLOADS"] = True  # senza, «Salva» non fa nulla nella finestra
-                webview.create_window("wmt-pdf", url, width=1280, height=840, min_size=(900, 600))
+                webview.settings["ALLOW_DOWNLOADS"] = True  # senza, «Scarica» non fa nulla nella finestra
+                server.desktop = True
+                api = DesktopApi(server)
+                api.window = webview.create_window("wmt-pdf", url, width=1280, height=840, min_size=(900, 600),
+                                                   js_api=api)
+                api.window.events.closing += api.confirm_close
                 webview.start()
                 return
             except ImportError:
@@ -299,3 +383,48 @@ def serve(workdir: Path, port: int = 0, open_window: bool = True) -> None:
     finally:
         server.shutdown()
         server.server_close()
+
+
+class DesktopApi:
+    """Funzioni della finestra nativa chiamabili dalla pagina: finestre di dialogo vere per Apri e Salva con nome.
+
+    I percorsi scelti qui finiscono nell'elenco di quelli ammessi dal server.
+    """
+
+    window: Any = None  # finestra di pywebview, assegnata dopo create_window
+
+    def __init__(self, server: GuiServer):
+        self._server = server
+
+    def open_dialog(self):
+        import webview
+
+        types = ("Documenti PDF (*.pdf;*.p7m)",)
+        result = self.window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=False, file_types=types)
+        if not result:
+            return None
+        path = str(result[0])
+        self._server.documents.allow(path)
+        return path
+
+    def save_dialog(self, name: str):
+        import webview
+
+        result = self.window.create_file_dialog(webview.FileDialog.SAVE, save_filename=str(name or "documento.pdf"),
+                                                file_types=("Documenti PDF (*.pdf)",))
+        if not result:
+            return None
+        path = str(result if isinstance(result, str) else result[0])
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+        self._server.documents.allow(path)
+        return path
+
+    def confirm_close(self):
+        """Alla chiusura della finestra, conferma se ci sono modifiche non salvate (False annulla la chiusura)."""
+        store = self._server.documents
+        unsaved = [d.name for d in store.docs.values() if d.index != d.saved_index]
+        if not unsaved:
+            return True
+        return self.window.create_confirmation_dialog(
+            "Modifiche non salvate", f"{', '.join(unsaved)}: le modifiche non salvate andranno perse. Chiudere?")

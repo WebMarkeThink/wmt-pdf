@@ -686,3 +686,37 @@ def test_xml_safe_strips_control_chars():
     from wmt_pdf.export import xml_safe
 
     assert xml_safe("a\x02b\x0cc\nd\te") == "abc\nd\te"
+
+
+# --- esportazione strutturata ------------------------------------------------------------
+
+
+def test_export_json_structure(capsys, tmp_path, table_pdf):
+    out = tmp_path / "doc.json"
+    code, _, err = run(capsys, "export", table_pdf, "--to", "json", "-o", out)
+    assert code == 0, err
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["page_count"] == 1
+    page = data["pages"][0]
+    assert page["number"] == 1 and page["width"] > 500
+    assert "Preventivo" in page["text"]
+    assert page["tables"][0][1] == ["Sito web", "1", "1500"]
+    line = next(seg for seg in page["lines"] if "Preventivo" in seg["text"])
+    x0, y0, x1, y1 = line["bbox"]
+    assert x0 < x1 and y0 < y1 and y1 > 780  # coordinate PDF, origine in basso a sinistra
+    assert data["fields"] == [] and data["annotations"] == []
+
+
+def test_export_xml_structure(capsys, tmp_path, text_pdf):
+    import xml.etree.ElementTree as ET
+
+    out = tmp_path / "doc.xml"
+    code, _, err = run(capsys, "export", text_pdf, "--to", "xml", "-o", out)
+    assert code == 0, err
+    root = ET.parse(out).getroot()
+    assert root.tag == "document" and root.get("page_count") == "3"
+    pages = root.findall("page")
+    assert len(pages) == 3
+    assert "Milano" in pages[0].find("text").text
+    assert pages[0].find("lines/line").get("bbox")
+    assert root.find("metadata/item[@name='Title']").text == "Contratto di prova"

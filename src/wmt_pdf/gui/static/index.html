@@ -6,83 +6,203 @@
   <meta name="wpdf-token" content="__TOKEN__">
   <title>wmt-pdf</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/doc.css">
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
   <div class="app">
     <aside class="sidebar" aria-label="Categorie">
-      <div class="brand">
+      <button class="brand" id="brand" type="button" title="Tutti gli strumenti">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg>
         </span>
         <span class="brand-name">wmt-pdf</span>
-      </div>
+      </button>
       <nav id="categories" class="categories"></nav>
       <p class="sidebar-note">I file restano su questo computer.</p>
     </aside>
 
-    <main class="main">
-      <section id="home" class="view">
-        <header class="home-header">
-          <div>
-            <h1>Cosa vuoi fare?</h1>
-            <p class="lead">Scegli uno strumento, oppure trascina qui un PDF per aprirlo.</p>
-          </div>
-          <label class="search">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <input id="search" type="search" placeholder="Cerca uno strumento" autocomplete="off">
-          </label>
-        </header>
-        <div id="grid" class="grid" role="list"></div>
-        <p id="empty" class="empty" hidden>Nessuno strumento corrisponde alla ricerca.</p>
-      </section>
-
-      <section id="tool" class="view" hidden>
-        <header class="tool-header">
-          <button id="back" class="btn ghost" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-            Strumenti
+    <div class="workspace">
+      <header class="appbar" role="toolbar" aria-label="File">
+        <div class="appbar-group">
+          <button class="bar-btn" id="cmd-open" type="button" title="Apri (Ctrl+O)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 7v11a2 2 0 0 0 2 2h13l3-9H7l-3 8"/></svg>
+            <span>Apri</span>
           </button>
-          <div class="tool-title">
-            <span id="tool-icon" class="app-icon small"></span>
-            <div>
-              <h2 id="tool-name"></h2>
-              <p id="tool-desc" class="muted"></p>
-            </div>
-          </div>
-        </header>
-
-        <div class="tool-body">
-          <div class="panel">
-            <h3>File</h3>
-            <label id="drop" class="drop" tabindex="0">
-              <input id="file-input" type="file" multiple hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
-              <strong>Trascina qui i file</strong>
-              <span class="muted" id="drop-hint">oppure fai clic per sceglierli</span>
-            </label>
-            <ol id="files" class="files"></ol>
-          </div>
-
-          <div class="panel">
-            <h3>Opzioni</h3>
-            <form id="options" class="options" autocomplete="off"></form>
-            <button id="run" class="btn primary" type="button" disabled>Esegui</button>
-            <p id="run-hint" class="muted small"></p>
+          <div class="menu-wrap">
+            <button class="bar-btn" id="cmd-recent" type="button" aria-haspopup="menu" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <span>Recenti</span>
+            </button>
+            <div class="menu" id="recent-menu" role="menu" hidden></div>
           </div>
         </div>
+        <div class="doc-tab" id="doc-tab" hidden>
+          <button class="doc-tab-name" id="doc-name" type="button" title="Torna al documento"></button>
+          <span class="doc-dirty" id="doc-dirty" title="Modifiche non salvate" hidden>●</span>
+        </div>
+        <div class="appbar-group right">
+          <button class="bar-btn icon-only" id="cmd-undo" type="button" title="Annulla (Ctrl+Z)" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+          </button>
+          <button class="bar-btn icon-only" id="cmd-redo" type="button" title="Ripeti (Ctrl+Y)" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg>
+          </button>
+          <span class="bar-sep" aria-hidden="true"></span>
+          <button class="bar-btn" id="cmd-save" type="button" title="Salva (Ctrl+S)" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>
+            <span>Salva</span>
+          </button>
+          <button class="bar-btn" id="cmd-saveas" type="button" title="Salva con nome (Ctrl+Maiusc+S)" disabled>
+            <span>Salva con nome</span>
+          </button>
+          <button class="bar-btn icon-only" id="cmd-download" type="button" title="Scarica una copia" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+          </button>
+        </div>
+        <input id="open-input" type="file" accept=".pdf,.p7m" hidden>
+      </header>
 
-        <section id="result" class="panel result" hidden aria-live="polite">
-          <div class="result-head">
-            <h3>Risultato</h3>
-            <span id="verdict" class="badge" hidden></span>
-          </div>
-          <pre id="output" class="output"></pre>
-          <ul id="outputs" class="outputs"></ul>
+      <main class="main">
+        <section id="home" class="view">
+          <header class="home-header">
+            <div>
+              <h1>Cosa vuoi fare?</h1>
+              <p class="lead">Apri un PDF per leggerlo e modificarlo, oppure scegli uno strumento. Puoi anche trascinare qui un file.</p>
+            </div>
+            <label class="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="search" type="search" placeholder="Cerca uno strumento" autocomplete="off">
+            </label>
+          </header>
+          <section id="recent-home" class="recent-home" hidden>
+            <h3>Recenti</h3>
+            <ul id="recent-list" class="recent-list"></ul>
+          </section>
+          <div id="grid" class="grid" role="list"></div>
+          <p id="empty" class="empty" hidden>Nessuno strumento corrisponde alla ricerca.</p>
         </section>
-      </section>
-    </main>
+
+        <section id="tool" class="view" hidden>
+          <header class="tool-header">
+            <button id="back" class="btn ghost" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              Strumenti
+            </button>
+            <div class="tool-title">
+              <span id="tool-icon" class="app-icon small"></span>
+              <div>
+                <h2 id="tool-name"></h2>
+                <p id="tool-desc" class="muted"></p>
+              </div>
+            </div>
+          </header>
+          <div class="tool-body">
+            <div class="panel">
+              <h3>File</h3>
+              <label id="drop" class="drop" tabindex="0">
+                <input id="file-input" type="file" multiple hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+                <strong>Trascina qui i file</strong>
+                <span class="muted" id="drop-hint">oppure fai clic per sceglierli</span>
+              </label>
+              <ol id="files" class="files"></ol>
+            </div>
+            <div class="panel">
+              <h3>Opzioni</h3>
+              <form id="options" class="options" autocomplete="off"></form>
+              <button id="run" class="btn primary" type="button" disabled>Esegui</button>
+              <p id="run-hint" class="muted small"></p>
+            </div>
+          </div>
+          <section id="result" class="panel result" hidden aria-live="polite">
+            <div class="result-head">
+              <h3>Risultato</h3>
+              <span id="verdict" class="badge" hidden></span>
+            </div>
+            <pre id="output" class="output"></pre>
+            <ul id="outputs" class="outputs"></ul>
+          </section>
+        </section>
+
+        <section id="doc" class="view doc-view" hidden>
+          <aside class="thumbs" id="thumbs" aria-label="Pagine"></aside>
+          <div class="stage">
+            <div class="stage-bar">
+              <div class="modes" role="radiogroup" aria-label="Modalità">
+                <button class="mode" data-mode="select" type="button" aria-pressed="true" title="Fai clic su un testo per modificarlo">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M12 4v16M9 20h6"/></svg>Modifica testo
+                </button>
+                <button class="mode" data-mode="add" type="button" aria-pressed="false" title="Fai clic dove vuoi scrivere">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5h12v2M10 5v14M7 19h6"/><path d="M18 14v6M15 17h6"/></svg>Aggiungi testo
+                </button>
+              </div>
+              <div class="pager">
+                <button class="btn ghost" id="doc-prev" type="button" aria-label="Pagina precedente">‹</button>
+                <span id="doc-page" class="muted"></span>
+                <button class="btn ghost" id="doc-next" type="button" aria-label="Pagina successiva">›</button>
+                <button class="btn ghost" id="doc-zoom-out" type="button" aria-label="Riduci">−</button>
+                <span id="doc-zoom" class="muted"></span>
+                <button class="btn ghost" id="doc-zoom-in" type="button" aria-label="Ingrandisci">+</button>
+              </div>
+            </div>
+            <div class="canvas-wrap" id="canvas-wrap">
+              <div class="page-holder" id="page-holder">
+                <canvas id="doc-canvas"></canvas>
+                <div class="overlay" id="overlay"></div>
+              </div>
+            </div>
+          </div>
+          <aside class="doc-tools" aria-label="Strumenti del documento">
+            <h3>Pagina</h3>
+            <div class="tool-row">
+              <button class="btn" id="page-rotate" type="button">Ruota</button>
+              <button class="btn" id="page-delete" type="button">Elimina</button>
+            </div>
+            <h3>Testo</h3>
+            <form class="mini-form" id="find-form">
+              <input id="find-text" type="text" placeholder="Cerca" required>
+              <input id="replace-text" type="text" placeholder="Sostituisci con">
+              <div class="tool-row">
+                <button class="btn" type="submit">Sostituisci</button>
+                <button class="btn" id="highlight-btn" type="button">Evidenzia</button>
+              </div>
+            </form>
+            <h3>Altri strumenti</h3>
+            <div class="doc-tool-list" id="doc-tool-list"></div>
+            <p id="doc-message" class="doc-message" aria-live="polite"></p>
+          </aside>
+        </section>
+      </main>
+    </div>
   </div>
+
+  <div class="popover" id="popover" hidden role="dialog" aria-label="Testo">
+    <label class="field"><span id="pop-title">Testo</span>
+      <textarea id="pop-text" rows="3"></textarea>
+    </label>
+    <div class="pop-extra" id="pop-extra">
+      <label class="field inline"><span>Corpo</span><input id="pop-size" type="number" min="4" max="200" value="11"></label>
+      <label class="field inline"><span>Colore</span><input id="pop-color" type="color" value="#000000"></label>
+      <label class="check"><input id="pop-bold" type="checkbox">Grassetto</label>
+    </div>
+    <p class="muted small" id="pop-note"></p>
+    <div class="tool-row">
+      <button class="btn primary small-btn" id="pop-apply" type="button">Applica</button>
+      <button class="btn" id="pop-delete" type="button">Elimina</button>
+      <button class="btn ghost" id="pop-cancel" type="button">Annulla</button>
+    </div>
+  </div>
+
+  <dialog id="tool-dialog" class="tool-dialog" aria-labelledby="td-title">
+    <h2 id="td-title"></h2>
+    <p id="td-desc" class="muted"></p>
+    <form id="td-options" class="options" autocomplete="off"></form>
+    <div class="tool-row end">
+      <button class="btn ghost" id="td-cancel" type="button">Annulla</button>
+      <button class="btn primary small-btn" id="td-run" type="button">Applica al documento</button>
+    </div>
+  </dialog>
 
   <dialog id="viewer" class="viewer" aria-label="Anteprima">
     <header class="viewer-bar">

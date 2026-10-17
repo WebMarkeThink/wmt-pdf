@@ -88,7 +88,8 @@ def page_stats(page: pdfium.PdfPage) -> tuple[str, PageStats]:
 
 
 def clean(text: str) -> str:
-    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\x02", "-").replace("￾", "-")
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\x02", "-").replace("\ufffe", "-")
+    text = text.replace("\xa0", " ")  # spazi non separabili: per chi cerca e legge sono spazi
     text = "\n".join(line.rstrip() for line in text.split("\n"))
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()

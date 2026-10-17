@@ -28,9 +28,22 @@ Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert,
 uv run wpdf gui
 ```
 
-Si apre una finestra con gli strumenti a icone, divisi per categoria (leggi, organizza, converti, ottimizza,
-modifica, moduli, proteggi e firma): si sceglie lo strumento, si trascinano i file, si impostano le opzioni e
-si salva il risultato, con l'anteprima dei PDF. Usa lo stesso motore della riga di comando.
+Due modi di lavorare, con la barra in alto sempre disponibile (Apri, Recenti, Annulla, Ripeti, Salva,
+Salva con nome, Scarica):
+
+- **Documento**: si apre un PDF (Apri, trascinandolo nella finestra, o dai recenti) e lo si modifica direttamente:
+  clic su un testo per cambiarlo o eliminarlo, «Aggiungi testo» e clic sul punto per scrivere, ruota o elimina la
+  pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti applicati al documento aperto. Ogni modifica
+  è una versione: si annulla e si ripete. Miniature delle pagine a sinistra.
+- **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,
+  proteggi e firma) per lavorare su uno o più file; i PDF risultanti si aprono come documento con «Apri».
+
+Scorciatoie: Ctrl+O apri, Ctrl+S salva, Ctrl+Maiusc+S salva con nome, Ctrl+Z annulla, Ctrl+Y ripeti, frecce o
+PagSu/PagGiù per le pagine. Prima di chiudere con modifiche non salvate viene chiesta conferma.
+
+Nella finestra nativa «Apri» e «Salva con nome» usano le finestre di dialogo del sistema, «Salva» riscrive il file
+aperto e i file recenti restano tra una sessione e l'altra. Nel browser (senza l'extra `gui`) si lavora su copie:
+«Salva» scarica il file e i recenti non ci sono.
 
 Funziona su questo computer: un piccolo server su 127.0.0.1, raggiungibile solo dalla finestra (token di sessione,
 controllo di host e origine); i file caricati e prodotti stanno in una cartella temporanea che si cancella alla
@@ -68,8 +81,23 @@ Per i PDF protetti: `--password` oppure `--password-env NOME_VARIABILE` (non res
 | `wpdf unwatermark FILE` | toglie le filigrane marcate (di wpdf, Acrobat e altri editor) |
 | `wpdf highlight FILE "testo" [--note ... --color verde]` | evidenzia ogni occorrenza |
 | `wpdf annotations FILE [--remove -o out.pdf]` | elenca (con il testo evidenziato) o toglie le annotazioni |
-| `wpdf export FILE --to docx\|xlsx\|html\|md\|txt\|png\|jpg\|tiff` | esporta; xlsx prende le tabelle con i numeri italiani convertiti |
+| `wpdf export FILE --to docx\|xlsx\|html\|md\|txt\|json\|xml\|png\|jpg\|tiff` | esporta; xlsx prende le tabelle con i numeri italiani convertiti; json e xml danno la struttura completa (metadati, testo e righe con coordinate, tabelle, campi, annotazioni, segnalibri) |
 | `wpdf ocr FILE -o out.pdf` | PDF ricercabile: testo invisibile sotto le pagine scansionate |
+
+### Testo
+
+| Comando | Cosa fa |
+|---|---|
+| `wpdf textobjects FILE --page N [--json]` | pezzi di testo della pagina con posizione, font e corpo |
+| `wpdf replace FILE "vecchio" "nuovo" [--pages ...] -o out.pdf` | sostituisce un testo in tutto il documento |
+| `wpdf edittext FILE --page N --at x,y --text "nuovo" -o out.pdf` | cambia il pezzo di testo in quel punto (testo vuoto: lo elimina); oppure `--index` |
+| `wpdf addtext FILE --page N --at x,y --text "riga 1\nriga 2" [--size 11 --color #c00000 --bold] -o out.pdf` | scrive testo nuovo |
+
+Le coordinate sono in punti PDF dall'angolo in basso a sinistra (A4: 595 × 842). Quando le lettere nuove sono nel
+font del testo originale, la modifica avviene sul posto con lo stesso font; altrimenti (tipico dei font incorporati
+in sottoinsieme, che contengono solo le lettere usate) il pezzo di testo viene riscritto nella stessa posizione e
+dimensione con un font di sistema, e il comando lo dice. Un testo diviso dal programma che ha creato il PDF in più
+pezzi non si sostituisce in un colpo solo: `replace` lo segnala, e i pezzi si cambiano con `edittext`.
 
 ### Moduli (fase 3)
 
@@ -158,8 +186,8 @@ Non leggere i PDF con Read: usa `wpdf`.
 - Filigrane: si tolgono solo quelle marcate come tali; una filigrana disegnata come testo normale non è distinguibile dal contenuto.
 - Ottimizzazione: ricomprime le immagini a colori e in scala di grigi; non tocca CMYK, maschere e immagini in bianco e nero, né i font.
 - PDF/A non ancora supportato.
-- Interfaccia grafica: prima versione. Mancano un visualizzatore con modifica diretta del testo e delle annotazioni,
-  la password dei PDF protetti per gli strumenti diversi da «Sblocca», gli installatori (vedi il piano).
+- Interfaccia grafica: manca la password dei PDF protetti per gli strumenti diversi da «Sblocca», lo spostamento
+  del testo col mouse e la modifica delle annotazioni esistenti; gli installatori sono da decidere (vedi il piano).
 - `merge`, `pages` e `split`: i PDF protetti restano protetti, con la stessa password di apertura; per toglierla si usa `unlock`.
 - Conversione di un `.html` o `.md`: può includere immagini della sua cartella (e sottocartelle). Per un HTML scaricato
   da fonti non fidate conviene spostarlo prima in una cartella a sé.

@@ -47,6 +47,7 @@ class Tool:
     suffix: str = ""
     options: tuple[Option, ...] = ()
     one_of: tuple[str, ...] = ()  # almeno una di queste opzioni
+    hidden: bool = False  # solo dalla vista documento (serve un punto sulla pagina), non nella griglia
 
 
 CATEGORIES = {
@@ -103,8 +104,10 @@ _TOOLS = [
          )),
     Tool("export", "export", "Esporta", "In Word, Excel, HTML, Markdown, testo o immagini", "export", "converti",
          output="export", options=(
-             Option("to", "Formato", "choice", "--to", ("docx", "xlsx", "html", "md", "txt", "png", "jpg", "tiff"),
-                    ("Word", "Excel (tabelle)", "HTML", "Markdown", "Testo", "Immagini PNG", "Immagini JPG",
+             Option("to", "Formato", "choice", "--to", ("docx", "xlsx", "html", "md", "txt", "json", "xml", "png", "jpg",
+                                                       "tiff"),
+                    ("Word", "Excel (tabelle)", "HTML", "Markdown", "Testo", "JSON (struttura completa)",
+                     "XML (struttura completa)", "Immagini PNG", "Immagini JPG",
                      "TIFF multipagina"), default="docx", required=True),
              Option("dpi", "Risoluzione immagini (dpi)", "number", "--dpi", default=150),
          )),
@@ -133,6 +136,28 @@ _TOOLS = [
              Option("query", "Testo da evidenziare", "text", "", required=True),
              Option("color", "Colore", "choice", "--color", COLORS, default="giallo"),
              Option("note", "Nota", "text", "--note"),
+         )),
+    Tool("replace", "replace", "Sostituisci testo", "Cambia un testo in tutto il documento", "replace", "modifica",
+         suffix="modificato", options=(
+             Option("find", "Testo da cercare", "text", "", required=True, help="maiuscole e minuscole contano"),
+             Option("replacement", "Testo nuovo", "text", "", required=True),
+             Option("pages", "Solo le pagine (es. 1-3)", "text", "--pages"),
+         )),
+    Tool("edittext", "edittext", "Modifica testo", "Cambia un pezzo di testo nel punto indicato", "edit-text",
+         "modifica", suffix="modificato", hidden=True, one_of=("index", "at"), options=(
+             Option("page", "Pagina", "number", "--page", required=True, default=1),
+             Option("index", "Pezzo di testo", "number", "--index"),
+             Option("at", "Punto x,y", "text", "--at"),
+             Option("text", "Testo nuovo", "text", "--text", required=True),
+         )),
+    Tool("addtext", "addtext", "Aggiungi testo", "Scrive testo in un punto della pagina", "add-text", "modifica",
+         suffix="con_testo", hidden=True, options=(
+             Option("page", "Pagina", "number", "--page", required=True, default=1),
+             Option("at", "Punto x,y", "text", "--at", required=True),
+             Option("text", "Testo", "text", "--text", required=True),
+             Option("size", "Corpo", "number", "--size", default=11),
+             Option("color", "Colore", "text", "--color", default="#000000"),
+             Option("bold", "Grassetto", "bool", "--bold"),
          )),
     Tool("fields", "fields", "Campi del modulo", "Elenco dei campi compilabili", "form", "moduli", output="none"),
     Tool("fill", "fill", "Compila modulo", "Da un file JSON o CSV (più righe: un PDF per riga)", "fill", "moduli",

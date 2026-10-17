@@ -1,0 +1,149 @@
+/* Barra superiore, file recenti e vista documento. */
+
+.brand { border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.app { grid-template-columns: 220px minmax(0, 1fr); }
+.workspace { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
+.appbar {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.appbar-group { display: flex; align-items: center; gap: 4px; }
+.appbar-group.right { margin-left: auto; }
+.bar-btn {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--text); font: inherit;
+  font-size: 14px; padding: 7px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+}
+.bar-btn:hover:not(:disabled) { background: var(--surface-2); }
+.bar-btn:disabled { opacity: .4; cursor: default; }
+.bar-btn svg { width: 18px; height: 18px; }
+.bar-btn.icon-only { padding: 7px; }
+.bar-sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute; top: calc(100% + 6px); left: 0; min-width: 300px; max-width: 420px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; z-index: 30;
+}
+.menu button {
+  display: flex; flex-direction: column; align-items: flex-start; width: 100%; border: 0; background: none; color: var(--text);
+  font: inherit; padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left;
+}
+.menu button:hover { background: var(--surface-2); }
+.menu small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.menu .menu-empty { padding: 10px; color: var(--muted); font-size: 14px; }
+.doc-tab { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 10px; border-radius: 9px; background: var(--surface-2); }
+.doc-tab-name {
+  border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34vw;
+}
+.doc-dirty { color: var(--warn); font-size: 12px; }
+.main { flex: 1; }
+
+.recent-home { margin-bottom: 26px; }
+.recent-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.recent-list button {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; color: var(--text); font: inherit; cursor: pointer; text-align: left;
+  box-shadow: var(--shadow);
+}
+.recent-list button:hover { border-color: var(--accent); }
+.file-badge {
+  width: 34px; height: 40px; border-radius: 6px; background: #d64545; color: #fff; display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; flex: none;
+}
+.recent-list .meta { min-width: 0; display: flex; flex-direction: column; }
+.recent-list .meta strong, .recent-list .meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-list .meta small { color: var(--muted); }
+
+.main.doc-mode { padding: 0; }
+.doc-view { display: grid; grid-template-columns: 150px minmax(0, 1fr) 260px; height: calc(100vh - 53px); }
+.thumbs {
+  overflow-y: auto; padding: 14px 12px; border-right: 1px solid var(--border); background: var(--surface);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.thumb { border: 2px solid transparent; border-radius: 8px; padding: 3px; background: none; cursor: pointer; color: var(--muted); font: inherit; font-size: 12px; }
+.thumb canvas { width: 100%; display: block; background: #fff; border-radius: 4px; box-shadow: var(--shadow); }
+.thumb[aria-current="true"] { border-color: var(--accent); color: var(--text); }
+.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.stage-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px;
+  border-bottom: 1px solid var(--border); flex-wrap: wrap;
+}
+.modes { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 10px; }
+.mode {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--muted); font: inherit;
+  font-size: 14px; padding: 6px 10px; border-radius: 8px; cursor: pointer;
+}
+.mode svg { width: 16px; height: 16px; }
+.mode[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.pager { display: flex; align-items: center; gap: 2px; }
+.canvas-wrap { flex: 1; overflow: auto; background: var(--surface-2); padding: 24px; display: flex; justify-content: center; align-items: flex-start; }
+.page-holder { position: relative; box-shadow: 0 2px 12px rgba(0, 0, 0, .18); background: #fff; }
+.page-holder canvas { display: block; }
+.overlay { position: absolute; inset: 0; }
+.overlay.add { cursor: crosshair; }
+.tbox { position: absolute; border: 1px solid transparent; border-radius: 2px; cursor: text; }
+.overlay.select .tbox:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tbox.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.overlay.add .tbox { pointer-events: none; }
+.marker {
+  position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.doc-tools {
+  overflow-y: auto; padding: 18px 16px; border-left: 1px solid var(--border); background: var(--surface);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.doc-tools h3 { margin: 8px 0 0; }
+.tool-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.tool-row.end { justify-content: flex-end; }
+.tool-row .btn { flex: 1; }
+.mini-form { display: flex; flex-direction: column; gap: 8px; }
+.mini-form input, .popover textarea, .popover input[type="number"] {
+  font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px;
+  padding: 8px 10px; width: 100%;
+}
+.doc-tool-list { display: flex; flex-direction: column; gap: 2px; }
+.doc-tool-list button {
+  display: flex; align-items: center; gap: 10px; border: 0; background: none; color: var(--text); font: inherit;
+  font-size: 14px; padding: 7px 8px; border-radius: 8px; cursor: pointer; text-align: left;
+}
+.doc-tool-list button:hover { background: var(--surface-2); }
+.doc-tool-list .app-icon { width: 28px; height: 28px; border-radius: 8px; }
+.doc-tool-list .app-icon svg { width: 16px; height: 16px; }
+.doc-message { font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+.doc-message.error { color: var(--bad); }
+
+.popover {
+  position: fixed; z-index: 40; width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .25); padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.pop-extra { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.field.inline { width: 80px; }
+.field.inline input[type="color"] {
+  width: 100%; height: 36px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); padding: 2px;
+}
+.btn.small-btn { width: auto; padding: 9px 16px; font-size: 15px; flex: 1; }
+.tool-dialog {
+  width: min(460px, 94vw); border: 0; border-radius: 16px; padding: 22px; background: var(--surface); color: var(--text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+}
+.tool-dialog::backdrop { background: rgba(10, 14, 22, .5); }
+.tool-dialog h2 { margin-bottom: 4px; }
+.tool-dialog .options { margin: 16px 0; }
+
+@media (max-width: 1100px) {
+  .doc-view { grid-template-columns: 110px minmax(0, 1fr) 220px; }
+  .bar-btn span { display: none; }
+}
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .doc-view { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .thumbs { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .thumb { width: 80px; flex: none; }
+  .doc-tools { border-left: 0; border-top: 1px solid var(--border); }
+  .canvas-wrap { min-height: 60vh; }
+}
+
+/* Con un documento aperto la barra delle categorie non serve: tutto lo spazio alla pagina. */
+body.doc-open .app { grid-template-columns: minmax(0, 1fr); }
+body.doc-open .sidebar { display: none; }
