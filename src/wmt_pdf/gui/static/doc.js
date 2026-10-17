@@ -20,7 +20,7 @@ export { pdfjs };
 const NOT_IN_LIST = new Set(["merge", "convert", "p7m", "edittext", "addtext", "replace", "highlight", "rotate", "pages"]);
 
 const doc = {
-  state: null, pdf: null, page: 1, scale: 1.25, mode: "select", viewport: null,
+  state: null, pdf: null, page: 1, scale: 1.25, mode: "pointer", viewport: null, selected: null, reselect: null, boxesRun: 0,
   task: null, thumbsRun: 0, busy: false, dialogTool: null, dialogFiles: {},
 };
 let ctx = null;
@@ -105,7 +105,7 @@ async function drawPage() {
   holder.style.height = canvas.style.height;
   const context = canvas.getContext("2d");
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  doc.task = page.render({ canvasContext: context, viewport, annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS });
+  doc.task = page.render({ canvasContext: context, viewport, annotationMode: pdfjs.AnnotationMode.ENABLE });
   try {
     await doc.task.promise;
   } catch (error) {
@@ -120,38 +120,92 @@ async function drawPage() {
   await loadTextBoxes();
 }
 
+const KIND_NAMES = { text: "Testo", image: "Immagine", graphic: "Elemento grafico", annotation: "Annotazione" };
+
 async function loadTextBoxes() {
+  const run = ++doc.boxesRun; // due caricamenti di fila (pagina e modalità): vale solo l'ultimo
   const overlay = $("overlay");
   overlay.innerHTML = "";
   overlay.className = `overlay ${doc.mode}`;
+  select(null);
+  if (doc.mode === "add") return;
+  const pointer = doc.mode === "pointer";
   let objects = [];
   try {
-    objects = await api(`/api/doc/${doc.state.id}/textobjects?page=${doc.page}`);
-  } catch {
-    return; // pagina senza testo leggibile: si può comunque aggiungere testo
+    const kind = pointer ? "objects" : "textobjects";
+    objects = await api(`/api/doc/${doc.state.id}/${kind}?page=${doc.page}`);
+  } catch (error) {
+    if (pointer) message(error.message, true); // la pagina resta visibile; si può comunque aggiungere testo
+    return;
   }
-  for (const obj of objects) {
+  if (run !== doc.boxesRun) return;
+  const want = doc.reselect; // dopo uno spostamento resta selezionato l'oggetto spostato
+  doc.reselect = null;
+  let reselect = null;
+  for (const item of objects) {
+    const obj = pointer ? { ...item, text: item.label } : { ...item, kind: "text", label: item.text };
     // PDF.js 6 converte solo punti: il riquadro si ricava dai due angoli.
     const [x0, y0] = doc.viewport.convertToViewportPoint(obj.bbox[0], obj.bbox[1]);
     const [x1, y1] = doc.viewport.convertToViewportPoint(obj.bbox[2], obj.bbox[3]);
-    const box = el("div", { class: "tbox", title: obj.text });
+    const name = KIND_NAMES[obj.kind];
+    let title = obj.label; // testo: il testo stesso
+    if (obj.kind !== "text") title = obj.label === name ? name : `${name}: ${obj.label}`;
+    const box = el("div", { class: `tbox kind-${obj.kind}`, title });
     Object.assign(box.style, {
       left: `${Math.min(x0, x1) - 1}px`, top: `${Math.min(y0, y1) - 1}px`,
-      width: `${Math.abs(x1 - x0) + 2}px`, height: `${Math.abs(y1 - y0) + 2}px`,
+      width: `${Math.max(Math.abs(x1 - x0), 4) + 2}px`, height: `${Math.max(Math.abs(y1 - y0), 4) + 2}px`,
     });
     box.addEventListener("pointerdown", (event) => startDrag(event, obj, box));
     box.addEventListener("click", (event) => event.stopPropagation());
+    if (pointer && obj.kind === "text") box.addEventListener("dblclick", () => editObject(obj, box));
     overlay.append(box);
+    // index -1: l'ultimo di quel tipo, dove finisce l'oggetto spostato.
+    if (want?.kind === obj.kind && [-1, obj.index].includes(want.index)) reselect = { obj, box };
+  }
+  if (reselect && pointer) select(reselect.obj, reselect.box);
+}
+
+// Clic: in «Modifica testo» apre la modifica, in «Seleziona» seleziona. Trascinando: si sposta.
+const DRAG_THRESHOLD = 4; // pixel: sotto questa soglia è un clic
+
+function select(obj, box) {
+  clearTimeout(doc.selected?.timer); // uno spostamento con le frecce in sospeso non vale più
+  document.querySelectorAll(".tbox.selected").forEach((b) => b.classList.remove("selected"));
+  doc.selected = obj ? { obj, box, timer: null, start: null } : null;
+  if (!obj) return;
+  box.classList.add("selected");
+  message(`Selezionato: ${KIND_NAMES[obj.kind].toLowerCase()}. Trascinalo, oppure frecce per spostarlo (Maiusc: di più)${
+    obj.kind === "text" ? "; doppio clic per modificarlo" : ""}`);
+}
+
+async function moveObject(obj, dxPdf, dyPdf) {
+  const by = `${dxPdf.toFixed(2)},${dyPdf.toFixed(2)}`;
+  const version = doc.state.version;
+  if (doc.mode === "select") {
+    await apply("movetext", { page: doc.page, index: obj.index, by });
+  } else {
+    // Dopo lo spostamento l'oggetto va in fondo alla pagina (le annotazioni restano dove sono nell'elenco).
+    doc.reselect = { kind: obj.kind, index: obj.kind === "annotation" ? obj.index : -1 };
+    await apply("move", { page: doc.page, kind: obj.kind, index: obj.index, by });
+  }
+  if (doc.state.version === version) { // rifiutato o non eseguito: il riquadro torna dov'è davvero l'oggetto
+    doc.reselect = null;
+    loadTextBoxes();
   }
 }
 
-// Clic su un pezzo di testo: lo si modifica. Trascinandolo: lo si sposta.
-const DRAG_THRESHOLD = 4; // pixel: sotto questa soglia è un clic
+// Dallo spostamento sullo schermo a quello in punti PDF (tiene conto di zoom e rotazione).
+function pdfDelta(fromLeft, fromTop, toLeft, toTop) {
+  const [x0, y0] = doc.viewport.convertToPdfPoint(fromLeft, fromTop);
+  const [x1, y1] = doc.viewport.convertToPdfPoint(toLeft, toTop);
+  return [x1 - x0, y1 - y0];
+}
 
 function startDrag(event, obj, box) {
-  if (doc.mode !== "select" || event.button !== 0 || doc.busy) return;
+  if (doc.mode === "add" || event.button !== 0 || doc.busy) return;
   event.preventDefault();
   event.stopPropagation();
+  if (doc.mode === "pointer") select(obj, box);
   const overlay = $("overlay").getBoundingClientRect();
   const drag = {
     startX: event.clientX, startY: event.clientY,
@@ -178,28 +232,64 @@ function startDrag(event, obj, box) {
     box.removeEventListener("pointerup", end);
     box.removeEventListener("pointercancel", end);
     if (!drag.moved) {
-      editObject(obj, box);
+      if (doc.mode === "select") editObject(obj, box);
       return;
     }
     if (e.type === "pointercancel") {
       loadTextBoxes();
       return;
     }
-    // Dallo spostamento sullo schermo a quello in punti PDF (tiene conto di zoom e rotazione).
-    const [x0, y0] = doc.viewport.convertToPdfPoint(drag.left, drag.top);
-    const [x1, y1] = doc.viewport.convertToPdfPoint(parseFloat(box.style.left), parseFloat(box.style.top));
-    apply("movetext", { page: doc.page, index: obj.index, by: `${(x1 - x0).toFixed(2)},${(y1 - y0).toFixed(2)}` });
+    const [dx, dy] = pdfDelta(drag.left, drag.top, parseFloat(box.style.left), parseFloat(box.style.top));
+    moveObject(obj, dx, dy);
   };
   box.addEventListener("pointermove", move);
   box.addEventListener("pointerup", end);
   box.addEventListener("pointercancel", end);
 }
 
+const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
+// Frecce sull'oggetto selezionato: 1 punto alla volta (10 con Maiusc); si applica quando si smette di premere.
+export function nudgeSelection(event) {
+  const sel = doc.selected;
+  if (!sel || doc.mode !== "pointer" || !(event.key in ARROWS)) return false;
+  if (doc.busy) return true; // mentre si applica uno spostamento le frecce non cambiano pagina
+  const [ux, uy] = ARROWS[event.key];
+  const step = (event.shiftKey ? 10 : 1) * doc.scale; // pixel per punto PDF
+  const left = parseFloat(sel.box.style.left);
+  const top = parseFloat(sel.box.style.top);
+  sel.box.style.left = `${left + ux * step}px`;
+  sel.box.style.top = `${top + uy * step}px`;
+  sel.box.classList.add("dragging");
+  if (!sel.start) sel.start = [left, top];
+  clearTimeout(sel.timer);
+  const armed = { page: doc.page, mode: doc.mode, version: doc.state.version };
+  sel.timer = setTimeout(() => {
+    // Pagina, modalità o documento cambiati nel frattempo: lo spostamento non si applica a un altro oggetto.
+    if (doc.selected !== sel || doc.page !== armed.page || doc.mode !== armed.mode
+        || doc.state.version !== armed.version) return;
+    const [dx, dy] = pdfDelta(sel.start[0], sel.start[1], parseFloat(sel.box.style.left), parseFloat(sel.box.style.top));
+    sel.start = null;
+    moveObject(sel.obj, dx, dy);
+  }, 450);
+  return true;
+}
+
+export function clearSelection() {
+  if (!doc.selected) return false;
+  const pending = doc.selected.start;
+  select(null);
+  if (pending) loadTextBoxes(); // spostamento con le frecce annullato: il riquadro torna al suo posto
+  message("");
+  return true;
+}
+
 function setMode(mode) {
   doc.mode = mode;
   document.querySelectorAll(".mode").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  $("overlay").className = `overlay ${mode}`;
   closePopover();
+  message("");
+  if (doc.viewport) loadTextBoxes();
 }
 
 function goTo(page) {
@@ -242,6 +332,7 @@ async function renderThumbs() {
 // --- modifica e aggiunta di testo ---------------------------------------------------------------
 
 function onOverlayClick(event) {
+  if (doc.mode === "pointer") clearSelection(); // clic fuori dagli oggetti: niente selezionato
   if (doc.mode !== "add" || !doc.viewport) return;
   const rect = $("overlay").getBoundingClientRect();
   const x = event.clientX - rect.left;

@@ -63,6 +63,7 @@ class _Info:
     bbox: list[float]
     font: str
     embedded: bool
+    clip: list = field(default_factory=list)  # ritaglio attivo, in coordinate della pagina (vedi clip_paths)
 
 
 # --- lettura con PDFium ----------------------------------------------------------------------------
@@ -99,6 +100,67 @@ def _color(getter, obj) -> tuple[int, int, int] | None:
     return rgba[0].value, rgba[1].value, rgba[2].value
 
 
+Segment = tuple[int, float, float, bool]  # tipo PDFium, x, y, chiude il tracciato
+
+
+def clip_paths(handle) -> list[list[Segment]]:
+    """Il ritaglio di un oggetto: PDFium lo tiene già nelle coordinate della pagina."""
+    clip = raw.FPDFPageObj_GetClipPath(handle)
+    if not clip:
+        return []
+    paths = []
+    for k in range(max(0, raw.FPDFClipPath_CountPaths(clip))):
+        segments = []
+        for j in range(max(0, raw.FPDFClipPath_CountPathSegments(clip, k))):
+            seg = raw.FPDFClipPath_GetPathSegment(clip, k, j)
+            x, y = ctypes.c_float(), ctypes.c_float()
+            raw.FPDFPathSegment_GetPoint(seg, ctypes.byref(x), ctypes.byref(y))
+            segments.append((raw.FPDFPathSegment_GetType(seg), x.value, y.value, bool(raw.FPDFPathSegment_GetClose(seg))))
+        paths.append(segments)  # vuoto = ritaglia tutto: va riprodotto, non saltato
+    return paths
+
+
+def clip_ops(paths: list[list[Segment]], dx: float, dy: float) -> list:
+    """Lo stesso ritaglio spostato di dx, dy: l'oggetto spostato si vede esattamente come prima."""
+    op = pikepdf.Operator
+    result = []
+    for segments in paths:
+        if not segments:  # ritaglio vuoto: l'oggetto resta invisibile com'era
+            segments = [(raw.FPDF_SEGMENT_MOVETO, -dx, -dy, False)]
+        curve: list[float] = []
+        for kind, x, y, close in segments:
+            x, y = round(x + dx, 4), round(y + dy, 4)
+            if kind == raw.FPDF_SEGMENT_MOVETO:
+                result.append(pikepdf.ContentStreamInstruction([x, y], op("m")))
+            elif kind == raw.FPDF_SEGMENT_BEZIERTO:  # tre punti di fila fanno una curva
+                curve += [x, y]
+                if len(curve) == 6:
+                    result.append(pikepdf.ContentStreamInstruction(curve, op("c")))
+                    curve = []
+            else:
+                result.append(pikepdf.ContentStreamInstruction([x, y], op("l")))
+            if close and not curve:
+                result.append(pikepdf.ContentStreamInstruction([], op("h")))
+        result += [pikepdf.ContentStreamInstruction([], op("W")), pikepdf.ContentStreamInstruction([], op("n"))]
+    return result
+
+
+def wrap_and_append(pdf: pikepdf.Pdf, page: pikepdf.Page, rebuilt: list, moved: list) -> None:
+    """Contenuto originale tra q e Q (più le Q che gli mancano), poi gli oggetti spostati, senza trasformazioni."""
+    depth = 0
+    for ins in rebuilt:
+        if isinstance(ins, pikepdf.ContentStreamInlineImage):
+            continue
+        name = str(ins.operator)
+        if name == "q":
+            depth += 1
+        elif name == "Q" and depth:
+            depth -= 1
+    page.obj.Contents = pdf.make_stream(
+        b"q\n" + pikepdf.unparse_content_stream(rebuilt) + b"\n" + b"Q\n" * (depth + 1)
+        + pikepdf.unparse_content_stream(moved))
+
+
 def _read_page(data: bytes, page_no: int, password: str | None) -> list[_Info]:
     """Tutti i pezzi di testo di primo livello della pagina, nell'ordine del flusso."""
     doc = _open(data, password)
@@ -121,6 +183,7 @@ def _read_page(data: bytes, page_no: int, password: str | None) -> list[_Info]:
                     stroke=_color(raw.FPDFPageObj_GetStrokeColor, handle),
                     mode=raw.FPDFTextObj_GetTextRenderMode(handle), bold="bold" in name.lower(),
                     bbox=_bounds(handle), font=name, embedded=bool(raw.FPDFFont_GetIsEmbedded(font)),
+                    clip=clip_paths(handle),
                 ))
             return infos
         finally:
@@ -640,7 +703,8 @@ def move_object(data: bytes, target: Path, page_no: int, index: int, *, by: tupl
         for i, ins in enumerate(instructions):
             rebuilt.extend(replacement if i == show.position else [ins])
         op = pikepdf.Operator
-        moved = [pikepdf.ContentStreamInstruction([], op("BT")),
+        moved = [pikepdf.ContentStreamInstruction([], op("q")), *clip_ops(info.clip, dx, dy),
+                 pikepdf.ContentStreamInstruction([], op("BT")),
                  pikepdf.ContentStreamInstruction([pikepdf.Name(show.font), show.size], op("Tf")),
                  pikepdf.ContentStreamInstruction([show.char_spacing], op("Tc")),
                  pikepdf.ContentStreamInstruction([show.word_spacing], op("Tw"))]
@@ -655,10 +719,8 @@ def move_object(data: bytes, target: Path, page_no: int, index: int, *, by: tupl
             moved.append(pikepdf.ContentStreamInstruction([original.operands[0]], op("TJ")))  # crenatura compresa
         else:
             moved.append(pikepdf.ContentStreamInstruction([original.operands[-1]], op("Tj")))
-        moved.append(pikepdf.ContentStreamInstruction([], op("ET")))
-        # Il contenuto originale tra q e Q: le sue trasformazioni non toccano il testo spostato.
-        page.obj.Contents = pdf.make_stream(
-            b"q\n" + pikepdf.unparse_content_stream(rebuilt) + b"\nQ\n" + pikepdf.unparse_content_stream(moved))
+        moved += [pikepdf.ContentStreamInstruction([], op("ET")), pikepdf.ContentStreamInstruction([], op("Q"))]
+        wrap_and_append(pdf, page, rebuilt, moved)
         buf = io.BytesIO()
         pdf.save(buf, encryption=pdf.is_encrypted)
     result = buf.getvalue()

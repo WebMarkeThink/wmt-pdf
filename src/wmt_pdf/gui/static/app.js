@@ -4,7 +4,8 @@ import {
   toast, upload,
 } from "./common.js";
 import {
-  PDF_OPTIONS, currentDoc, download, initDocs, openDocument, pageNav, pdfjs, redo, save, saveAs, undo,
+  PDF_OPTIONS, clearSelection, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav, pdfjs, redo, save,
+  saveAs, undo,
 } from "./doc.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -415,6 +416,10 @@ function bindCommands() {
     } else if (mod && !typing && key === "y") {
       event.preventDefault();
       redo();
+    } else if (!typing && state.view === "doc" && nudgeSelection(event)) {
+      event.preventDefault(); // le frecce spostano l'oggetto selezionato invece di cambiare pagina
+    } else if (!typing && state.view === "doc" && event.key === "Escape" && clearSelection()) {
+      event.preventDefault();
     } else if (!typing && state.view === "doc" && ["PageDown", "ArrowRight"].includes(event.key)) {
       pageNav.next();
     } else if (!typing && state.view === "doc" && ["PageUp", "ArrowLeft"].includes(event.key)) {

@@ -1,4 +1,4 @@
-"""Comandi per il testo: textobjects, replace, edittext, addtext."""
+"""Comandi per il testo e gli oggetti della pagina: textobjects, replace, edittext, movetext, objects, move, addtext."""
 
 from __future__ import annotations
 
@@ -46,6 +46,19 @@ def register(sub) -> None:
     where = p.add_mutually_exclusive_group(required=True)
     where.add_argument("--by", help="spostamento dx,dy in punti (y verso l'alto)")
     where.add_argument("--to", help="nuova origine x,y del testo (linea di base), in punti dal basso a sinistra")
+
+    p = add("objects", cmd_objects, "Oggetti della pagina che si possono spostare (testo, immagini, grafica, annotazioni)",
+            output=False)
+    p.add_argument("--page", type=int, default=1)
+    p.add_argument("--json", action="store_true")
+
+    p = add("move", cmd_move, "Sposta un oggetto della pagina: testo, immagine, firma grafica, timbro, annotazione")
+    p.add_argument("--page", type=int, required=True)
+    p.add_argument("--kind", required=True, choices=("text", "image", "graphic", "annotation"))
+    p.add_argument("--index", type=int, required=True, help="indice da `wpdf objects`")
+    where = p.add_mutually_exclusive_group(required=True)
+    where.add_argument("--by", help="spostamento dx,dy in punti (y verso l'alto)")
+    where.add_argument("--to", help="nuovo angolo in basso a sinistra x,y, in punti dal basso a sinistra")
 
     p = add("addtext", cmd_addtext, "Aggiunge testo in una posizione della pagina")
     p.add_argument("--page", type=int, required=True)
@@ -127,6 +140,33 @@ def cmd_movetext(args) -> int:
     source, password, target = _prepare(args)
     move_object(source.data, target, args.page, args.index, by=by, to=to, password=password)
     print(f"{target}: testo spostato a pagina {args.page}")
+    return EXIT_OK
+
+
+def cmd_objects(args) -> int:
+    from wmt_pdf.objects import KIND_NAMES, list_page_objects
+
+    source = load_source(args.file)
+    items = list_page_objects(source.data, args.page, resolve_password(args))
+    if args.json:
+        print(json.dumps([o.__dict__ for o in items], ensure_ascii=False, indent=1))
+        return EXIT_OK
+    if not items:
+        print(f"Nessun oggetto a pagina {args.page}.")
+    for o in items:
+        x0, y0, x1, y1 = o.bbox
+        print(f"{o.kind} {o.index}: ({x0:.0f},{y0:.0f})-({x1:.0f},{y1:.0f}) {KIND_NAMES[o.kind]}: {o.label}")
+    return EXIT_OK
+
+
+def cmd_move(args) -> int:
+    from wmt_pdf.objects import KIND_NAMES, move_page_object
+
+    by = _point(args.by, "--by") if args.by else None
+    to = _point(args.to, "--to") if args.to else None
+    source, password, target = _prepare(args)
+    move_page_object(source.data, target, args.page, args.kind, args.index, by=by, to=to, password=password)
+    print(f"{target}: oggetto spostato ({KIND_NAMES[args.kind]}) a pagina {args.page}")
     return EXIT_OK
 
 

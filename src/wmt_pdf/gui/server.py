@@ -305,12 +305,14 @@ class Handler(BaseHTTPRequestHandler):
             doc = store.get(doc_id)
             if action == "":
                 return self._json(200, store.state(doc))
-            if action == "textobjects":
+            if action in ("objects", "textobjects"):
+                from wmt_pdf.objects import list_page_objects
                 from wmt_pdf.textedit import list_objects
 
                 query = dict(part.split("=", 1) for part in (urlparse(self.path).query or "").split("&") if "=" in part)
                 page = int(query.get("page", "1"))
-                items = list_objects(store.current(doc).read_bytes(), page)
+                reader = list_page_objects if action == "objects" else list_objects
+                items = reader(store.current(doc).read_bytes(), page)
                 return self._json(200, [o.__dict__ for o in items])
         except (ValueError, CliError) as exc:
             return self._error(400, str(exc))

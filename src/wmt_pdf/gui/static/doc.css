@@ -85,7 +85,21 @@
 .overlay.select .tbox:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .tbox.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .overlay.add .tbox { pointer-events: none; }
-.overlay.select .tbox { cursor: grab; touch-action: none; }
+.overlay.select .tbox, .overlay.pointer .tbox { cursor: grab; touch-action: none; }
+/* In «Seleziona» si vede subito cosa si può spostare. */
+.overlay.pointer .tbox { border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); }
+.overlay.pointer .tbox:hover { border-style: solid; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.overlay.pointer .tbox.kind-image, .overlay.pointer .tbox.kind-graphic { border-color: color-mix(in srgb, #8a4fff 60%, transparent); }
+.overlay.pointer .tbox.kind-annotation { border-color: color-mix(in srgb, #e08a00 70%, transparent); }
+.tbox.selected {
+  border: 2px solid var(--accent) !important; background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.tbox.selected::before, .tbox.selected::after {
+  content: ""; position: absolute; width: 7px; height: 7px; background: var(--surface); border: 2px solid var(--accent); border-radius: 2px;
+}
+.tbox.selected::before { left: -6px; top: -6px; }
+.tbox.selected::after { right: -6px; bottom: -6px; }
 .tbox.dragging { cursor: grabbing; border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .marker {
   position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--accent);
