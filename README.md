@@ -14,11 +14,12 @@ Serve [uv](https://docs.astral.sh/uv/). Funziona su Windows, macOS e Linux.
 uv sync                     # base
 uv sync --extra ocr         # con OCR (RapidOCR, modelli scaricati al primo uso)
 uv sync --extra convert     # conversione da Word, Excel, PowerPoint, ODT, Markdown, HTML, email
+uv sync --extra firma       # firma digitale, smart card, verifica sull'elenco europeo dei certificatori
 uv sync --all-extras        # tutto
 uv run wpdf --help
 ```
 
-Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert]"`.
+Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert,firma]"`.
 
 ## Comandi
 
@@ -81,6 +82,23 @@ oppure come `after`: un'etichetta del testo, e il campo va subito alla sua destr
 (`nome`, `nome+1`) e i segnalibri di ogni file finiscono sotto il segnalibro del file. Con `pages --order` i segnalibri
 seguono il nuovo ordine delle pagine.
 
+### Firme (fase 4)
+
+| Comando | Cosa fa |
+|---|---|
+| `wpdf sign FILE --p12 cert.p12 --p12-password-env VAR -o out` | firma PAdES per i PDF, CAdES (`.p7m`, documento incluso) per gli altri file; `--format` per scegliere |
+| `wpdf sign FILE --pkcs11 libreria.dll --pin-env VAR [--token-label ...] -o out` | firma con smart card o token, tramite la libreria PKCS#11 del produttore |
+| `wpdf sign ... --after "Firma" --image autografa.png` | firma visibile accanto a un'etichetta (o `--rect`, o `--field` per un campo firma esistente) |
+| `wpdf sign ... --tsa URL` | con marca temporale da un servizio RFC 3161 |
+| `wpdf verify FILE [--offline] [--trust-root ca.pem]` | verifica completa: integrità, certificatore nell'elenco europeo, revoca, marca temporale, firma qualificata (QES) |
+| `wpdf trust update [--country IT]` | scarica e verifica l'elenco europeo dei certificatori fidati; poi `verify` funziona anche senza rete |
+| `wpdf stamp FILE --image autografa.png --after "In fede"` | firma solo grafica, senza valore di firma digitale |
+
+Esiti di `verify`: 0 VALIDA, 2 NON VALIDA (documento alterato, firma rotta, certificato revocato),
+3 NON VERIFICABILE (certificatore non riconosciuto, informazioni mancanti). Le firme successive si aggiungono
+in modo incrementale: quelle già presenti restano valide. `p7m` e `signatures` restano i controlli rapidi
+(solo integrità), `verify` è quello completo.
+
 `info`, `text`, `search`, `tables` e `render` accettano anche un `.pdf.p7m`: il PDF viene estratto in automatico.
 I comandi di lettura hanno `--json`. Codici d'uscita: 0 ok, 1 errore, 2 firma non valida.
 
@@ -106,8 +124,15 @@ Non leggere i PDF con Read: usa `wpdf`.
 
 ## Limiti attuali
 
-- La verifica delle firme controlla l'integrità del contenuto e la corrispondenza col certificato.
-  Non controlla ancora che il certificatore sia nell'elenco europeo dei fidati, né la revoca: è la fase 3.
+- `verify --offline` non può controllare la revoca: l'esito è quindi NON VERIFICABILE. Online la revoca si verifica via OCSP/CRL,
+  e si contattano gli indirizzi indicati nei certificati del file (lo fanno tutti i verificatori).
+- La verifica è alla data di oggi: la validazione storica (firma valida alla data della marca temporale anche se il
+  certificato è poi scaduto) non è ancora gestita.
+- Firma con smart card: provata solo con certificati software (.p12); con un dispositivo vero va provata
+  sul lettore e sulla libreria del produttore (InfoCert, Aruba, Namirial, carta CNS).
+- Firma remota (Aruba, InfoCert, Namirial via API): non ancora, serve un contratto con il certificatore.
+- Firme parallele su un `.p7m` (più firmatari nella stessa busta): si verificano tutte; per firmare si aggiunge
+  una busta esterna (`.p7m.p7m`), come fanno anche i programmi di firma italiani.
 - L'OCR su scansioni rumorose a 150 dpi ritrova circa l'80% delle parole: va bene per capire il documento, non per citarlo alla lettera.
 - Ordine di lettura: segue quello di PDFium. Impaginazioni a più colonne complicate possono uscire mescolate.
 - Conversioni da Office: contenuto e struttura sì (titoli, paragrafi, tabelle, immagini), impaginazione identica no.

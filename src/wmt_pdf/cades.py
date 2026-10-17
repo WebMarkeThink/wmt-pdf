@@ -78,7 +78,7 @@ class P7mResult:
 def looks_like_cms(data: bytes) -> bool:
     """Vero se il file sembra un p7m (DER o base64), anche se poi non si apre."""
     try:
-        return _decode(data)[:1] == b"0"
+        return decode_p7m(data)[:1] == b"0"
     except P7mError:
         return False
 
@@ -86,17 +86,17 @@ def looks_like_cms(data: bytes) -> bool:
 def open_p7m(data: bytes) -> P7mResult:
     """Apre un p7m (DER o base64), anche annidato, e verifica ogni livello."""
     result = P7mResult(content=b"")
-    current = _decode(data)
+    current = decode_p7m(data)
     for _ in range(MAX_LAYERS):
-        signed_data = _load_signed_data(current)
+        signed_data = load_signed_data(current)
         content = signed_data["encap_content_info"]["content"].native
         if content is None:
             raise P7mError("firma staccata: il contenuto firmato non è incluso nel file")
         result.layers.append([_safe_check(si, signed_data, content) for si in signed_data["signer_infos"]])
         current = content
         try:
-            current = _decode(current)
-            _load_signed_data(current)
+            current = decode_p7m(current)
+            load_signed_data(current)
         except P7mError:
             current = content
             break
@@ -121,7 +121,7 @@ def guess_kind(content: bytes) -> str:
     return "sconosciuto"
 
 
-def _decode(data: bytes) -> bytes:
+def decode_p7m(data: bytes) -> bytes:
     if data[:1] == b"\x30":
         return data
     text = re.sub(rb"-----[A-Z0-9 ]+-----", b"", data)
@@ -134,7 +134,7 @@ def _decode(data: bytes) -> bytes:
     return decoded
 
 
-def _load_signed_data(data: bytes) -> cms.SignedData:
+def load_signed_data(data: bytes) -> cms.SignedData:
     if data[:1] != b"\x30":
         raise P7mError("non è un file p7m")
     try:

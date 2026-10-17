@@ -352,6 +352,13 @@ def _ensure_acroform(pdf: pikepdf.Pdf):
     return acro
 
 
+def place_box(pdf, data: bytes, password: str | None, item: dict, kind: str = "signature") -> tuple[int, list[float]]:
+    """Pagina e rettangolo per un riquadro (firma, timbro): da "rect" oppure accanto a un'etichetta ("after")."""
+    from wmt_pdf.marks import find_rects
+
+    return _place(pdf, data, password, item, kind, find_rects)
+
+
 def _place(pdf, data, password, item, kind, find_rects) -> tuple[int, list[float]]:
     """Pagina e rettangolo: dati esplicitamente, oppure subito a destra di un'etichetta del testo."""
     name = item["name"]

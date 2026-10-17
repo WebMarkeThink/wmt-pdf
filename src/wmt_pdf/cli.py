@@ -124,6 +124,10 @@ def build_parser() -> argparse.ArgumentParser:
     from wmt_pdf.cli_ops import register
 
     register(sub)
+
+    from wmt_pdf.cli_sign import register as register_sign
+
+    register_sign(sub)
     return parser
 
 
