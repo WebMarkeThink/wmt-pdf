@@ -20,6 +20,7 @@ import io
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pikepdf
 import pypdfium2 as pdfium
@@ -301,8 +302,8 @@ def _strings(ins) -> list:
 def _show_ops(instructions: list) -> list[_Show]:
     """Le istruzioni che scrivono davvero qualcosa: PDFium non crea pezzi di testo per quelle vuote."""
     result: list[_Show] = []
-    state = {"font": None, "size": 0.0, "tc": 0.0, "tw": 0.0}
-    stack: list[dict] = []
+    state: dict[str, Any] = {"font": None, "size": 0.0, "tc": 0.0, "tw": 0.0}
+    stack: list[dict[str, Any]] = []
     for i, ins in enumerate(instructions):
         if isinstance(ins, pikepdf.ContentStreamInlineImage):
             continue
