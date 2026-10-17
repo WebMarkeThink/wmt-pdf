@@ -113,6 +113,25 @@ def register(sub) -> None:
     p.add_argument("--lang", default="it")
     p.add_argument("--all-pages", action="store_true", help="anche le pagine che hanno già del testo")
 
+    # --- moduli (fase 3) ---
+    p = sub.add_parser("fields", help="Elenca i campi del modulo con tipo, valore e opzioni",
+                       description="Elenca i campi del modulo con tipo, valore e opzioni")
+    p.add_argument("file")
+    add_password_args(p)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_fields)
+
+    p = add("fill", cmd_fill, "Compila il modulo da JSON o CSV; con più righe CSV un PDF per riga",
+            output="PDF di destinazione (cartella se i dati hanno più righe)")
+    p.add_argument("--data", required=True, help='file .json ({"campo": valore}) o .csv con intestazione')
+    p.add_argument("--name-column", help="colonna da usare per il nome dei file (più righe)")
+    p.add_argument("--flatten", action="store_true", help="rende i campi parte della pagina, non più modificabili")
+
+    add("flatten", cmd_flatten, "Rende i campi parte della pagina (le altre annotazioni restano)")
+
+    p = add("form", cmd_form, "Aggiunge campi a un PDF da una specifica JSON (testo, data, casella, elenco, scelta, firma)")
+    p.add_argument("--spec", required=True, help='file JSON: {"fields": [{"name", "type", "rect" o "after", ...}]}')
+
 
 # --- supporto ----------------------------------------------------------------------
 
@@ -158,8 +177,11 @@ def cmd_merge(args) -> int:
         notes += converted.notes
         title = f.name.removesuffix(".p7m")
         parts.append(Part(Path(title).stem, converted.data, resolve_password(args)))
-    pages = merge(parts, target, bookmarks=not args.no_bookmarks)
-    print(f"{target}: {len(parts)} file, {pages} pagine, {_kb(target.stat().st_size)}")
+    result = merge(parts, target, bookmarks=not args.no_bookmarks)
+    print(f"{target}: {len(parts)} file, {result.pages} pagine, {_kb(target.stat().st_size)}")
+    if result.renamed_fields:
+        shown = ", ".join(result.renamed_fields[:10]) + (" …" if len(result.renamed_fields) > 10 else "")
+        notes.append(f"campi con lo stesso nome rinominati: {shown}")
     for note in notes:
         print(f"- {note}")
     return EXIT_OK
@@ -403,3 +425,117 @@ def cmd_ocr(args) -> int:
     return EXIT_OK
 
 
+
+
+# --- moduli ----------------------------------------------------------------------------------
+
+
+def cmd_fields(args) -> int:
+    from wmt_pdf.forms import list_fields
+
+    source = load_source(args.file)
+    items = list_fields(source.data, resolve_password(args))
+    if args.json:
+        print(json.dumps([i.__dict__ for i in items], ensure_ascii=False, indent=1))
+        return EXIT_OK
+    if not items:
+        print("Nessun campo modulo nel PDF.")
+        return EXIT_OK
+    for f in items:
+        parts = [f"p.{f.page}" if f.page else "p.?", f.name, f.label]
+        if f.value not in (None, "", False):
+            parts.append(f"= {f.value}")
+        if f.options:
+            parts.append(f"(opzioni: {', '.join(f.options)})")
+        if f.required:
+            parts.append("obbligatorio")
+        if f.readonly:
+            parts.append("sola lettura")
+        print(" · ".join(parts))
+    print(f"{len(items)} campi")
+    return EXIT_OK
+
+
+def cmd_fill(args) -> int:
+    from wmt_pdf.forms import fill, read_records, safe_filename
+
+    data_file = Path(args.data)
+    if not data_file.is_file():
+        raise CliError(f"file dati non trovato: {data_file}")
+    records = read_records(data_file)
+    if not records:
+        raise CliError(f"{data_file.name}: nessun dato da compilare")
+    source, password = load_source(args.file), resolve_password(args)
+    is_csv = data_file.suffix.lower() != ".json"  # nel CSV le colonne in più (es. per il nome file) si ignorano
+    if len(records) == 1:
+        target = Path(args.output)
+        check_target(target, [Path(args.file), data_file], args.force)
+        result = fill(source.data, target, records[0], flatten=args.flatten, ignore_unknown=is_csv, password=password)
+        print(f"{target}: {result.filled} campi compilati" + (", appiattito" if args.flatten else ""))
+        _fill_notes(result)
+        return EXIT_OK
+    outdir = Path(args.output)
+    if outdir.suffix.lower() == ".pdf":
+        raise CliError(f"i dati hanno {len(records)} righe: -o deve essere una cartella")
+    if args.name_column and any(args.name_column not in r for r in records):
+        raise CliError(f"colonna «{args.name_column}» assente nei dati")
+    stem = Path(source.name.removesuffix(".p7m")).stem
+    names: list[str] = []
+    taken: set[str] = set()  # Windows e macOS non distinguono maiuscole e minuscole nei nomi dei file
+    for i, record in enumerate(records, start=1):
+        base = safe_filename(str(record[args.name_column])) if args.name_column else f"{stem}_{i}"
+        name, k = base, 2
+        while name.casefold() in taken:
+            name, k = f"{base}_{k}", k + 1
+        names.append(name)
+        taken.add(name.casefold())
+    targets = [outdir / f"{n}.pdf" for n in names]
+    existing = [t for t in targets if t.exists()]
+    if existing and not args.force:
+        raise CliError(f"{existing[0]} esiste già: usa --force per sovrascriverlo")
+    # Prima si controllano tutte le righe: un errore alla riga 50 non deve lasciare 49 file a metà lavoro.
+    for i, record in enumerate(records, start=1):
+        try:
+            fill(source.data, None, record, flatten=args.flatten, ignore_unknown=is_csv, password=password)
+        except CliError as exc:
+            raise CliError(f"riga {i}: {exc}") from None
+    outdir.mkdir(parents=True, exist_ok=True)
+    last = None
+    for record, target in zip(records, targets):
+        last = fill(source.data, target, record, flatten=args.flatten, ignore_unknown=is_csv, password=password)
+    print(f"{len(targets)} moduli compilati in {outdir}")
+    if last is not None:
+        _fill_notes(last)
+    return EXIT_OK
+
+
+def _fill_notes(result) -> None:
+    if result.ignored:
+        print(f"- colonne ignorate (non sono campi del modulo): {', '.join(result.ignored)}")
+    if result.viewer_rendered:
+        print(f"- aspetto lasciato al visualizzatore (caratteri speciali): {', '.join(result.viewer_rendered)}")
+
+
+def cmd_flatten(args) -> int:
+    from wmt_pdf.forms import flatten
+
+    source, password, target = _prepare(args)
+    count = flatten(source.data, target, password)
+    print(f"{target}: {count} campi resi parte della pagina")
+    return EXIT_OK
+
+
+def cmd_form(args) -> int:
+    from wmt_pdf.forms import add_fields
+
+    spec_file = Path(args.spec)
+    if not spec_file.is_file():
+        raise CliError(f"specifica non trovata: {spec_file}")
+    try:
+        spec = json.loads(spec_file.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        raise CliError(f"{spec_file.name}: JSON non valido ({exc.msg}, riga {exc.lineno})") from None
+    source, password, target = _prepare(args)
+    count = add_fields(source.data, target, spec, password)
+    print(f"{target}: {count} campi aggiunti")
+    return EXIT_OK

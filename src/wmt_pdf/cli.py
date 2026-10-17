@@ -368,6 +368,7 @@ def cmd_render(args) -> int:
     if not MIN_DPI <= args.dpi <= MAX_DPI:
         raise CliError(f"--dpi tra {MIN_DPI} e {MAX_DPI}")
     source, doc = _open(args)
+    doc.init_forms()  # senza, PDFium non disegna i campi dei moduli
     try:
         number = parse_pages(args.page, len(doc))
         if len(number) != 1:

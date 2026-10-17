@@ -54,25 +54,128 @@ class Part:
     password: str | None = None
 
 
-def merge(parts: Iterable[Part], target: Path, bookmarks: bool = True) -> int:
-    """Unisce i PDF nell'ordine dato; ogni file diventa un segnalibro. Restituisce le pagine."""
+@dataclass
+class Outline:
+    title: str
+    page: int | None  # indice (da 0) nel documento di partenza
+    children: list[Outline]
+
+
+def read_outline(pdf: pikepdf.Pdf) -> list[Outline]:
+    """Segnalibri del documento con la pagina di destinazione risolta (anche le destinazioni con nome)."""
+    index = {page.obj.objgen: i for i, page in enumerate(pdf.pages)}
+
+    def target(item) -> int | None:
+        dest = item.destination
+        if dest is None and item.action is not None and item.action.get("/S") == pikepdf.Name.GoTo:
+            dest = item.action.get("/D")
+        if isinstance(dest, (pikepdf.Name, pikepdf.String)):
+            # Un Name ha la barra iniziale come sintassi; una String la può avere come parte del nome.
+            dest = _named_destination(pdf, str(dest)[1:] if isinstance(dest, pikepdf.Name) else str(dest))
+        if isinstance(dest, pikepdf.Dictionary):
+            dest = dest.get("/D")
+        if isinstance(dest, pikepdf.Array) and len(dest) and isinstance(dest[0], pikepdf.Dictionary):
+            return index.get(dest[0].objgen)
+        return None
+
+    def walk(items, depth=0) -> list[Outline]:
+        if depth > 32:
+            return []
+        return [Outline(str(i.title), target(i), walk(i.children, depth + 1)) for i in items]
+
+    try:
+        with pdf.open_outline() as outline:
+            return walk(outline.root)
+    except pikepdf.OutlineStructureError:
+        return []
+
+
+def _named_destination(pdf: pikepdf.Pdf, name: str):
+    try:
+        names = pdf.Root.get("/Names")
+        if names is not None and "/Dests" in names:
+            tree = pikepdf.NameTree(names.Dests)
+            if name in tree:
+                return tree[name]
+        dests = pdf.Root.get("/Dests")
+        if dests is not None and ("/" + name) in dests:
+            return dests["/" + name]
+    except (pikepdf.PdfError, KeyError, ValueError):
+        return None
+    return None
+
+
+def build_outline(items: list[Outline], page_map: dict[int, int]) -> list[pikepdf.OutlineItem]:
+    """Segnalibri per il documento nuovo: restano quelli che puntano a pagine riportate, nel nuovo ordine."""
+    return [node for _, node in _build(items, page_map)]
+
+
+def _build(items: list[Outline], page_map: dict[int, int]) -> list[tuple[int, pikepdf.OutlineItem]]:
+    built: list[tuple[int, pikepdf.OutlineItem]] = []
+    for item in items:
+        children = _build(item.children, page_map)
+        new_page = page_map.get(item.page) if item.page is not None else None
+        if new_page is None and children:
+            new_page = children[0][0]  # capitolo tolto ma con sottocapitoli rimasti: punta al primo
+        if new_page is None:
+            continue
+        node = pikepdf.OutlineItem(item.title, new_page)
+        node.children.extend(child for _, child in children)
+        built.append((new_page, node))
+    built.sort(key=lambda pair: pair[0])
+    return built
+
+
+def copy_pages(out: pikepdf.Pdf, src: pikepdf.Pdf, numbers: list[int]) -> dict[int, int]:
+    """Copia le pagine con i loro campi modulo; restituisce indice di partenza → nuovo indice (da 0).
+
+    add_pages_from porta i campi (rinominando i doppioni: nome, nome+1, ...) e le destinazioni con nome.
+    """
+    start = len(out.pages)
+    out.add_pages_from(src, pages=[n - 1 for n in numbers])
+    page_map: dict[int, int] = {}
+    for offset, n in enumerate(numbers):
+        page_map.setdefault(n - 1, start + offset)
+    return page_map
+
+
+@dataclass
+class MergeResult:
+    pages: int
+    renamed_fields: list[str]
+
+
+def merge(parts: Iterable[Part], target: Path, bookmarks: bool = True) -> MergeResult:
+    """Unisce i PDF nell'ordine dato: un segnalibro per file, con dentro i segnalibri del file; campi conservati."""
     out = pikepdf.new()
     opened = []  # pikepdf vuole i sorgenti aperti fino al salvataggio
     protected: tuple[pikepdf.Pdf, str] | None = None
+    original_names: set[str] = set()
     try:
-        with out.open_outline() as outline:
-            for part in parts:
-                src = open_pdf(part.data, part.password)
-                opened.append(src)
-                if src.is_encrypted and part.password and protected is None:
-                    protected = (src, part.password)
-                start = len(out.pages)
-                out.pages.extend(src.pages)
-                if bookmarks:
-                    outline.root.append(pikepdf.OutlineItem(part.title, start))
+        tops: list[pikepdf.OutlineItem] = []
+        for part in parts:
+            src = open_pdf(part.data, part.password)
+            opened.append(src)
+            if src.is_encrypted and part.password and protected is None:
+                protected = (src, part.password)
+            if "/AcroForm" in src.Root:
+                original_names |= {f.fully_qualified_name for f in src.acroform.fields}
+            start = len(out.pages)
+            page_map = copy_pages(out, src, list(range(1, len(src.pages) + 1)))
+            if bookmarks:
+                node = pikepdf.OutlineItem(part.title, start)
+                node.children.extend(build_outline(read_outline(src), page_map))
+                tops.append(node)
+        if bookmarks:
+            with out.open_outline() as outline:
+                outline.root.extend(tops)
+        renamed = []
+        if "/AcroForm" in out.Root:
+            renamed = sorted(f.fully_qualified_name for f in out.acroform.fields
+                             if f.fully_qualified_name not in original_names)
         # Se almeno un file era protetto, il risultato resta protetto con la stessa password.
         save(out, target, source=protected[0] if protected else None, password=protected[1] if protected else None)
-        return len(out.pages)
+        return MergeResult(len(out.pages), renamed)
     finally:
         for src in opened:
             src.close()
@@ -93,6 +196,17 @@ def split_groups(count: int, every: int | None = None, ranges: str | None = None
     raise CliError("indica --every N oppure --ranges \"1-3;4-9\"")
 
 
+def _derived(src: pikepdf.Pdf, numbers: list[int], target: Path, password: str | None) -> None:
+    """Documento nuovo con le pagine scelte, i loro campi e i segnalibri che vi puntano."""
+    with pikepdf.new() as out:
+        page_map = copy_pages(out, src, numbers)
+        items = build_outline(read_outline(src), page_map)
+        if items:
+            with out.open_outline() as outline:
+                outline.root.extend(items)
+        save(out, target, source=src, password=password)
+
+
 def split(data: bytes, groups: list[list[int]], outdir: Path, stem: str, password: str | None = None) -> list[Path]:
     outdir.mkdir(parents=True, exist_ok=True)
     written = []
@@ -100,20 +214,16 @@ def split(data: bytes, groups: list[list[int]], outdir: Path, stem: str, passwor
         for group in groups:
             label = f"{group[0]}-{group[-1]}" if len(group) > 1 else str(group[0])
             target = outdir / f"{stem}_{label}.pdf"
-            with pikepdf.new() as part:
-                part.pages.extend(src.pages[n - 1] for n in group)
-                save(part, target, source=src, password=password)
+            _derived(src, group, target, password)
             written.append(target)
     return written
 
 
 def select_pages(data: bytes, numbers: list[int], target: Path, password: str | None = None) -> int:
     """Nuovo PDF con le pagine indicate, nell'ordine indicato (anche ripetute)."""
-    with open_pdf(data, password) as src, pikepdf.new() as out:
-        for n in numbers:
-            out.pages.append(src.pages[n - 1])
-        save(out, target, source=src, password=password)
-        return len(numbers)
+    with open_pdf(data, password) as src:
+        _derived(src, numbers, target, password)
+    return len(numbers)
 
 
 def page_order(spec: str, count: int) -> list[int]:

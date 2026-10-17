@@ -186,6 +186,7 @@ def _render(doc, n: int, dpi: int):
 
 def export_images(source: Source, fmt: str, target: Path, *, dpi: int, password: str | None) -> list[Path]:
     doc = source.open(password)
+    doc.init_forms()  # senza, PDFium non disegna i campi dei moduli
     try:
         count = len(doc)
         if single_file(fmt, target):

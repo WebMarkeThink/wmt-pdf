@@ -15,6 +15,10 @@ import re
 from dataclasses import dataclass, field
 
 from asn1crypto import cms, x509
+
+# tsp aggiunge a CMSAttributeType nomi come signing_certificate_v2. asn1crypto calcola la tabella
+# inversa dei nomi una volta sola: se lo fa prima di questo import, pyHanko non può più firmare.
+from asn1crypto import tsp as _tsp  # noqa: F401
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa

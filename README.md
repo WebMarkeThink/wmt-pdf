@@ -55,6 +55,32 @@ Per i PDF protetti: `--password` oppure `--password-env NOME_VARIABILE` (non res
 | `wpdf export FILE --to docx\|xlsx\|html\|md\|txt\|png\|jpg\|tiff` | esporta; xlsx prende le tabelle con i numeri italiani convertiti |
 | `wpdf ocr FILE -o out.pdf` | PDF ricercabile: testo invisibile sotto le pagine scansionate |
 
+### Moduli (fase 3)
+
+| Comando | Cosa fa |
+|---|---|
+| `wpdf fields FILE [--json]` | campi con tipo, valore, opzioni, pagina, obbligatorietà |
+| `wpdf fill FILE --data dati.json -o out.pdf [--flatten]` | compila; da un CSV con più righe crea un PDF per riga (`-o cartella`, `--name-column nome`) |
+| `wpdf flatten FILE -o out.pdf` | rende i campi parte della pagina; evidenziazioni e note restano; rifiuta i PDF firmati |
+| `wpdf form FILE --spec campi.json -o out.pdf` | aggiunge campi: testo, data, casella, elenco, lista, scelta singola, firma |
+
+Specifica dei campi: ogni campo ha `name`, `type` e la posizione, data come `rect` `[x0, y0, x1, y1]` in punti
+oppure come `after`: un'etichetta del testo, e il campo va subito alla sua destra. Opzioni: `width`, `height`, `page`,
+`required`, `multiline`, `max_length`, `options`, `value`, `format` (per le date, es. `dd/mm/yyyy`).
+
+```json
+{"fields": [
+  {"name": "nome", "type": "text", "after": "Il sottoscritto", "width": 220, "required": true},
+  {"name": "nascita", "type": "date", "after": "Data di nascita"},
+  {"name": "privacy", "type": "checkbox", "after": "Acconsento"},
+  {"name": "firma", "type": "signature", "after": "Firma", "width": 180, "height": 40}
+]}
+```
+
+`merge`, `pages` e `split` conservano campi e segnalibri; in `merge` i campi con lo stesso nome vengono rinominati
+(`nome`, `nome+1`) e i segnalibri di ogni file finiscono sotto il segnalibro del file. Con `pages --order` i segnalibri
+seguono il nuovo ordine delle pagine.
+
 `info`, `text`, `search`, `tables` e `render` accettano anche un `.pdf.p7m`: il PDF viene estratto in automatico.
 I comandi di lettura hanno `--json`. Codici d'uscita: 0 ok, 1 errore, 2 firma non valida.
 
@@ -92,8 +118,7 @@ Non leggere i PDF con Read: usa `wpdf`.
 - Filigrane: si tolgono solo quelle marcate come tali; una filigrana disegnata come testo normale non è distinguibile dal contenuto.
 - Ottimizzazione: ricomprime le immagini a colori e in scala di grigi; non tocca CMYK, maschere e immagini in bianco e nero, né i font.
 - PDF/A non ancora supportato.
-- `merge`, `pages` e `split` creano un documento nuovo: i campi dei moduli e i segnalibri dei file di partenza non vengono
-  riportati (fase 3). I PDF protetti restano protetti, con la stessa password di apertura; per toglierla si usa `unlock`.
+- `merge`, `pages` e `split`: i PDF protetti restano protetti, con la stessa password di apertura; per toglierla si usa `unlock`.
 - Conversione di un `.html` o `.md`: può includere immagini della sua cartella (e sottocartelle). Per un HTML scaricato
   da fonti non fidate conviene spostarlo prima in una cartella a sé.
 
