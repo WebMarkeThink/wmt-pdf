@@ -73,6 +73,7 @@ export async function openDocument(body) {
 }
 
 async function load(state) {
+  window.getSelection()?.removeAllRanges(); // nessuna selezione rimasta sopra la pagina dopo una modifica
   doc.state = state;
   const data = new Uint8Array(await (await fetchBlob(state.file_id)).arrayBuffer());
   if (doc.loading) await doc.loading.destroy(); // in PDF.js 6 si chiude dal task di caricamento

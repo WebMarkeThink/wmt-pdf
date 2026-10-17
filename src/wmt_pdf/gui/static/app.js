@@ -410,6 +410,8 @@ function bindCommands() {
       event.preventDefault();
       if (event.shiftKey) redo();
       else undo();
+    } else if (mod && !typing && key === "a" && state.view === "doc") {
+      event.preventDefault(); // «seleziona tutto» sulla pagina evidenzierebbe tutto in scuro
     } else if (mod && !typing && key === "y") {
       event.preventDefault();
       redo();

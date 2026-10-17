@@ -147,3 +147,8 @@
 /* Con un documento aperto la barra delle categorie non serve: tutto lo spazio alla pagina. */
 body.doc-open .app { grid-template-columns: minmax(0, 1fr); }
 body.doc-open .sidebar { display: none; }
+
+/* La pagina, le miniature e i riquadri del testo non si selezionano: un doppio clic o Ctrl+A fuori dal
+   riquadro di modifica evidenzierebbero tutto in scuro sopra il documento. */
+.thumbs, .stage-bar, .canvas-wrap, .page-holder, .overlay, .tbox { user-select: none; -webkit-user-select: none; }
+.page-holder canvas { -webkit-user-drag: none; }

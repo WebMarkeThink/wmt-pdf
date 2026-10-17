@@ -176,7 +176,8 @@ def test_repeated_additions_do_not_duplicate_fonts(capsys, tmp_path, letter):
         run(capsys, "addtext", current, "--page", "1", "--at", f"72,{500 - i * 20}", "--text", f"Riga {i}", "-o", nxt)
         current = nxt
     first = (tmp_path / "v0.pdf").stat().st_size
-    assert current.stat().st_size < first * 1.3  # nessuna nuova copia del font a ogni passaggio
+    # Ogni aggiunta incorpora solo le lettere usate (decine di KB), mai il font intero (centinaia di KB).
+    assert current.stat().st_size - first < 2 * 100_000
 
 
 def test_edit_by_index(capsys, tmp_path, letter):
@@ -184,3 +185,43 @@ def test_edit_by_index(capsys, tmp_path, letter):
     code, _, err = run(capsys, "edittext", letter, "--page", "1", "--index", "1", "--text", "Scadenza: mai", "-o", out)
     assert code == 0, err
     assert "Scadenza: mai" in text_of(out)
+
+
+def _pixel(path, page, x, y, dpi=36):
+    doc = pdfium.PdfDocument(str(path))
+    try:
+        image = doc[page - 1].render(scale=dpi / 72).to_pil().convert("RGB")
+        return image.getpixel((int(x * dpi / 72), int(image.height - y * dpi / 72)))
+    finally:
+        doc.close()
+
+
+def test_edit_keeps_other_fills_colors(capsys, tmp_path, letter):
+    """Regressione: rigenerando la pagina, i riempimenti in spazi colore non RGB diventavano neri."""
+    colored = tmp_path / "colori.pdf"
+    with pikepdf.open(letter) as pdf:
+        page = pdf.pages[0]
+        lab = pikepdf.Array([pikepdf.Name.Lab, pikepdf.Dictionary(WhitePoint=[0.9505, 1.0, 1.089])])
+        page.obj.Resources.ColorSpace = pikepdf.Dictionary(CS0=lab)
+        page.contents_add(pdf.make_stream(b"q /CS0 cs 95 0 0 scn 300 300 200 100 re f Q"), prepend=True)
+        pdf.save(colored)
+    before = _pixel(colored, 1, 400, 350)
+    assert sum(before) > 600  # chiaro, quasi bianco
+    out = tmp_path / "modificato.pdf"
+    code, _, err = run(capsys, "replace", colored, "1.200", "1.350", "-o", out)
+    assert code == 0, err
+    assert _pixel(out, 1, 400, 350) == before
+    out2 = tmp_path / "ricreato.pdf"
+    code, _, err = run(capsys, "replace", colored, "Scadenza", "Scadenza Łódź", "-o", out2)
+    assert code == 0, err
+    assert "Scadenza Łódź" in text_of(out2)
+    assert _pixel(out2, 1, 400, 350) == before
+
+
+def test_added_text_is_editable_afterwards(capsys, tmp_path, letter):
+    added = tmp_path / "aggiunto.pdf"
+    run(capsys, "addtext", letter, "--page", "1", "--at", "72,500", "--text", "Nota provvisoria", "-o", added)
+    out = tmp_path / "corretto.pdf"
+    code, _, err = run(capsys, "replace", added, "provvisoria", "definitiva", "-o", out)
+    assert code == 0, err
+    assert "Nota definitiva" in text_of(out)
