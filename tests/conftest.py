@@ -228,3 +228,17 @@ def p7m_broken(fixtures_dir, p7m_file) -> Path:
     path = fixtures_dir / "rotto.pdf.p7m"
     path.write_bytes(bytes(raw))
     return path
+
+
+@pytest.fixture(autouse=True)
+def _italian_and_private_settings(monkeypatch, tmp_path_factory):
+    """I test controllano i messaggi in italiano e non devono leggere né scrivere le impostazioni dell'utente."""
+    from wmt_pdf.gui import documents
+
+    monkeypatch.setenv("WPDF_LANG", "it")
+    settings_file = tmp_path_factory.mktemp("impostazioni") / "impostazioni.json"
+    monkeypatch.setattr(documents, "_settings_path", lambda: settings_file)
+    yield
+    from wmt_pdf.i18n import set_language
+
+    set_language("it")

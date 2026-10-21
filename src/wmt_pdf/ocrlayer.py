@@ -10,6 +10,7 @@ import pypdfium2 as pdfium
 
 from wmt_pdf import ocr
 from wmt_pdf.extract import is_scanned, page_stats
+from wmt_pdf.i18n import t
 from wmt_pdf.ops import open_pdf, save
 from wmt_pdf.source import CliError
 
@@ -20,7 +21,7 @@ def make_searchable(data: bytes, target: Path, *, lang: str = "it", force: bool 
                     password: str | None = None) -> list[int]:
     """Aggiunge il testo alle pagine scansionate (o a tutte con force). Restituisce le pagine trattate."""
     if not ocr.available():
-        raise CliError("OCR non installato: `uv sync --extra ocr` (oppure pip install 'wmt-pdf[ocr]')")
+        raise CliError(t("OCR non installato: `uv sync --extra ocr` (oppure pip install 'wmt-pdf[ocr]')"))
     doc = pdfium.PdfDocument(data, password=password)
     layers: dict[int, bytes] = {}
     try:

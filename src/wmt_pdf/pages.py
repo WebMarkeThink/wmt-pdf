@@ -2,6 +2,8 @@
 
 from collections.abc import Iterable
 
+from wmt_pdf.i18n import t
+
 
 def parse_pages(spec: str | None, count: int) -> list[int]:
     """Restituisce i numeri di pagina (da 1) in ordine, senza duplicati."""
@@ -21,7 +23,7 @@ def parse_pages(spec: str | None, count: int) -> list[int]:
             start = _number(left, count) if left else 1
             end = _number(right, count) if right else count
             if start > end:
-                raise ValueError(f"intervallo al contrario: {part}")
+                raise ValueError(t("intervallo al contrario: {part}", part=part))
             numbers: Iterable[int] = range(start, end + 1)
         else:
             numbers = [_number(part, count)]
@@ -34,8 +36,8 @@ def parse_pages(spec: str | None, count: int) -> list[int]:
 
 def _number(text: str, count: int) -> int:
     if not text.isdigit():
-        raise ValueError(f"pagina non valida: {text}")
+        raise ValueError(t("pagina non valida: {text}", text=text))
     n = int(text)
     if not 1 <= n <= count:
-        raise ValueError(f"pagina {n} fuori dal documento (1-{count})")
+        raise ValueError(t("pagina {n} fuori dal documento (1-{count})", n=n, count=count))
     return n

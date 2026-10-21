@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pikepdf
 
+from wmt_pdf.i18n import t
 from wmt_pdf.pages import parse_pages
 from wmt_pdf.source import CliError
 
@@ -23,9 +24,9 @@ def open_pdf(data: bytes, password: str | None = None) -> pikepdf.Pdf:
             warnings.filterwarnings("ignore", message="A password was provided")
             return pikepdf.open(io.BytesIO(data), password=password or "")
     except pikepdf.PasswordError:
-        raise CliError("PDF protetto da password: usa --password o --password-env") from None
+        raise CliError(t("PDF protetto da password: usa --password o --password-env")) from None
     except pikepdf.PdfError as exc:
-        raise CliError(f"PDF non leggibile: {exc}") from None
+        raise CliError(t("PDF non leggibile: {exc}", exc=exc)) from None
 
 
 def save(pdf: pikepdf.Pdf, target: Path, *, source: pikepdf.Pdf | None = None, password: str | None = None,
@@ -185,15 +186,15 @@ def merge(parts: Iterable[Part], target: Path, bookmarks: bool = True) -> MergeR
 def split_groups(count: int, every: int | None = None, ranges: str | None = None) -> list[list[int]]:
     if every:
         if every < 1:
-            raise CliError("--every vuole un numero positivo")
+            raise CliError(t("--every vuole un numero positivo"))
         return [list(range(s, min(s + every, count + 1))) for s in range(1, count + 1, every)]
     if ranges:
         groups = [parse_pages(chunk, count) for chunk in ranges.split(";") if chunk.strip()]
         labels = [(g[0], g[-1]) for g in groups]
         if len(set(labels)) != len(labels):
-            raise CliError("--ranges contiene due gruppi uguali: il secondo file sostituirebbe il primo")
+            raise CliError(t("--ranges contiene due gruppi uguali: il secondo file sostituirebbe il primo"))
         return groups
-    raise CliError("indica --every N oppure --ranges \"1-3;4-9\"")
+    raise CliError(t("indica --every N oppure --ranges \"1-3;4-9\""))
 
 
 def _derived(src: pikepdf.Pdf, numbers: list[int], target: Path, password: str | None) -> None:
@@ -242,7 +243,7 @@ def page_order(spec: str, count: int) -> list[int]:
 
 def rotate(data: bytes, angle: int, numbers: list[int], target: Path, password: str | None = None) -> None:
     if angle % 90:
-        raise CliError("--angle deve essere un multiplo di 90")
+        raise CliError(t("--angle deve essere un multiplo di 90"))
     with open_pdf(data, password) as pdf:
         for n in numbers:
             pdf.pages[n - 1].rotate(angle, relative=True)
@@ -272,7 +273,7 @@ def set_metadata(data: bytes, values: dict[str, str | None], target: Path, clear
 def protect(data: bytes, target: Path, user: str, owner: str | None, *, allow_print: bool = True,
             allow_copy: bool = True, allow_edit: bool = True, password: str | None = None) -> None:
     if not user:
-        raise CliError("password vuota")
+        raise CliError(t("password vuota"))
     permissions = pikepdf.Permissions(
         print_lowres=allow_print, print_highres=allow_print,
         extract=allow_copy, accessibility=True,
@@ -283,7 +284,7 @@ def protect(data: bytes, target: Path, user: str, owner: str | None, *, allow_pr
         # senza --owner-password se ne genera una casuale, così i limiti valgono davvero.
         owner = owner or secrets.token_urlsafe(24)
         if owner == user:
-            raise CliError("la password proprietario deve essere diversa da quella di apertura")
+            raise CliError(t("la password proprietario deve essere diversa da quella di apertura"))
         save(pdf, target, encryption=pikepdf.Encryption(user=user, owner=owner, R=6, allow=permissions))
 
 

@@ -9,6 +9,7 @@ from pathlib import Path
 import pypdfium2 as pdfium
 
 from wmt_pdf.cades import P7mError, P7mResult, looks_like_cms, open_p7m
+from wmt_pdf.i18n import t
 
 
 class CliError(Exception):
@@ -32,14 +33,14 @@ class Source:
             return pdfium.PdfDocument(self.data, password=password)
         except pdfium.PdfiumError as exc:
             if "password" in str(exc).lower():
-                raise CliError("PDF protetto da password: usa --password") from None
-            raise CliError(f"PDF non leggibile: {exc}") from None
+                raise CliError(t("PDF protetto da password: usa --password")) from None
+            raise CliError(t("PDF non leggibile: {exc}", exc=exc)) from None
 
 
 def read_file(path: str | Path) -> bytes:
     p = Path(path)
     if not p.is_file():
-        raise CliError(f"file non trovato: {p}")
+        raise CliError(t("file non trovato: {p}", p=p))
     return p.read_bytes()
 
 
@@ -53,15 +54,15 @@ def load_source(path: str | Path) -> Source:
         try:
             result = open_p7m(data)
         except P7mError as exc:
-            raise CliError(f"p7m non leggibile ({exc}): il contenuto non viene aperto") from None
+            raise CliError(t("p7m non leggibile ({exc}): il contenuto non viene aperto", exc=exc)) from None
         if result.content_kind != "pdf":
             raise CliError(
-                f"il p7m contiene un file {result.content_kind}, non un PDF: estrailo con `wpdf p7m {p.name} -o <file>`"
+                t("il p7m contiene un file {content_kind}, non un PDF: estrailo con `wpdf p7m {name} -o <file>`", content_kind=t(result.content_kind), name=p.name)
             )
         return Source(p, result.content, result)
     if b"%PDF" in data[:1024]:  # PDF con qualche byte spurio in testa
         return Source(p, data)
-    raise CliError(f"non è un PDF né un p7m: {p.name}")
+    raise CliError(t("non è un PDF né un p7m: {name}", name=p.name))
 
 
 def resolve_password(args) -> str | None:
@@ -70,7 +71,7 @@ def resolve_password(args) -> str | None:
     if env:
         value = os.environ.get(env)
         if value is None:
-            raise CliError(f"variabile d'ambiente {env} non impostata")
+            raise CliError(t("variabile d'ambiente {env} non impostata", env=env))
         return value
     return getattr(args, "password", None)
 
@@ -79,9 +80,9 @@ def check_target(target: Path, source: Path | list[Path], force: bool) -> None:
     """Mai sovrascrivere un file di partenza; un file esistente solo con --force."""
     sources = source if isinstance(source, list) else [source]
     if any(_same(target, s) for s in sources):
-        raise CliError("la destinazione coincide con il file di partenza: scegli un altro nome")
+        raise CliError(t("la destinazione coincide con il file di partenza: scegli un altro nome"))
     if target.exists() and not force:
-        raise CliError(f"{target} esiste già: usa --force per sovrascriverlo")
+        raise CliError(t("{target} esiste già: usa --force per sovrascriverlo", target=target))
 
 
 def _same(a: Path, b: Path) -> bool:
@@ -99,5 +100,6 @@ def p7m_banner(source: Source) -> str | None:
         return None
     signers = [s for layer in source.p7m.layers for s in layer]
     names = ", ".join(s.name or "?" for s in signers)
-    state = "integro" if source.p7m.ok else "NON integro: controlla con `wpdf p7m`"
-    return f"> PDF estratto dal p7m, firmato da {names} ({state}; certificatore non verificato)"
+    state = t("integro") if source.p7m.ok else t("NON integro: controlla con `wpdf p7m`")
+    return t("> PDF estratto dal p7m, firmato da {names} ({state}; certificatore non verificato)", names=names,
+             state=state)

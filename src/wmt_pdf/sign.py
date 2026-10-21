@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError
 
 
@@ -45,13 +46,13 @@ def from_pkcs12(path: Path, password: str | None) -> SignerHandle:
 
     _quiet()
     if not path.is_file():
-        raise CliError(f"certificato non trovato: {path}")
+        raise CliError(t("certificato non trovato: {path}", path=path))
     try:
         signer = signers.SimpleSigner.load_pkcs12(str(path), passphrase=password.encode() if password else None)
     except (ValueError, TypeError, OSError):
         signer = None
     if signer is None:
-        raise CliError(f"{path.name}: certificato non leggibile (password sbagliata o file non PKCS#12)")
+        raise CliError(t("{name}: certificato non leggibile (password sbagliata o file non PKCS#12)", name=path.name))
     return SignerHandle(signer)
 
 
@@ -59,11 +60,11 @@ def from_pkcs11(module: Path, pin: str | None, token_label: str | None, key_labe
                 cert_label: str | None) -> SignerHandle:
     """Smart card o token: serve la libreria PKCS#11 del produttore (.dll, .so, .dylib)."""
     if not module.is_file():
-        raise CliError(f"modulo PKCS#11 non trovato: {module} (è la libreria fornita con il lettore o il token)")
+        raise CliError(t("modulo PKCS#11 non trovato: {module} (è la libreria fornita con il lettore o il token)", module=module))
     try:
         from pyhanko.sign import pkcs11
     except ImportError:
-        raise CliError("supporto PKCS#11 non installato: `uv sync --extra firma`") from None
+        raise CliError(t("supporto PKCS#11 non installato: `uv sync --extra firma`")) from None
     _quiet()
     from pyhanko.config.pkcs11 import TokenCriteria
 
@@ -71,12 +72,12 @@ def from_pkcs11(module: Path, pin: str | None, token_label: str | None, key_labe
         criteria = TokenCriteria(label=token_label) if token_label else None
         session = pkcs11.open_pkcs11_session(str(module), token_criteria=criteria, user_pin=pin)
     except Exception as exc:  # noqa: BLE001 - gli errori dei moduli dei produttori sono di ogni tipo
-        raise CliError(f"dispositivo PKCS#11 non accessibile: {exc}") from None
+        raise CliError(t("dispositivo PKCS#11 non accessibile: {exc}", exc=exc)) from None
     try:
         signer = pkcs11.PKCS11Signer(session, key_label=key_label, cert_label=cert_label or key_label)
     except Exception as exc:  # noqa: BLE001
         session.close()
-        raise CliError(f"chiave o certificato non trovati sul dispositivo: {exc}") from None
+        raise CliError(t("chiave o certificato non trovati sul dispositivo: {exc}", exc=exc)) from None
     return SignerHandle(signer, session)
 
 
@@ -108,19 +109,19 @@ def sign_pdf(data: bytes, target: Path, handle: SignerHandle, placement: Placeme
     try:
         writer = IncrementalPdfFileWriter(io.BytesIO(data), strict=False)
     except Exception as exc:  # noqa: BLE001
-        raise CliError(f"PDF non leggibile per la firma: {exc}") from None
+        raise CliError(t("PDF non leggibile per la firma: {exc}", exc=exc)) from None
     if writer.prev.encrypted:
         if not password:
-            raise CliError("PDF protetto da password: usa --password o --password-env")
+            raise CliError(t("PDF protetto da password: usa --password o --password-env"))
         writer.encrypt(password)
     existing = [name for name, value, _ in fields.enumerate_sig_fields(writer.prev, filled_status=None)]
     filled = {name for name, value, _ in fields.enumerate_sig_fields(writer.prev, filled_status=True)}
     spec = None
     if placement.field:
         if placement.field not in existing:
-            raise CliError(f"campo firma «{placement.field}» inesistente (campi firma: {', '.join(existing) or 'nessuno'})")
+            raise CliError(t("campo firma «{field}» inesistente (campi firma: {v})", field=placement.field, v=', '.join(existing) or 'nessuno'))
         if placement.field in filled:
-            raise CliError(f"il campo «{placement.field}» è già firmato")
+            raise CliError(t("il campo «{field}» è già firmato", field=placement.field))
         name = placement.field
     else:
         n = len(existing) + 1
@@ -164,7 +165,7 @@ def sign_pdf(data: bytes, target: Path, handle: SignerHandle, placement: Placeme
     except CliError:
         raise
     except Exception as exc:  # noqa: BLE001 - errori di rete della TSA, del dispositivo, del PDF
-        raise CliError(f"firma non riuscita: {exc}") from None
+        raise CliError(t("firma non riuscita: {exc}", exc=exc)) from None
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(out.getvalue())
     return name
@@ -180,7 +181,7 @@ def sign_cades(data: bytes, target: Path, handle: SignerHandle, *, tsa: str | No
         info = asyncio.run(handle.signer.async_sign_general_data(
             data, "sha256", detached=False, use_cades=True, timestamper=timestamper(tsa) if tsa else None))
     except Exception as exc:  # noqa: BLE001
-        raise CliError(f"firma non riuscita: {exc}") from None
+        raise CliError(t("firma non riuscita: {exc}", exc=exc)) from None
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(info.dump())
 
@@ -197,7 +198,7 @@ def graphic_stamp(data: bytes, target: Path, image: Path, page_no: int, rect: li
     from wmt_pdf.ops import open_pdf, save
 
     if not image.is_file():
-        raise CliError(f"immagine non trovata: {image}")
+        raise CliError(t("immagine non trovata: {image}", image=image))
     with open_pdf(data, password) as pdf:
         page = pdf.pages[page_no - 1]
         box = page.mediabox

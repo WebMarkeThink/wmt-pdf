@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import shutil
 import threading
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError
 
 MAX_RECENT = 15
@@ -31,6 +33,39 @@ def _recent_path() -> Path:
     from wmt_pdf.trust import cache_dir
 
     return cache_dir() / "recenti.json"
+
+
+def _settings_path() -> Path:
+    from wmt_pdf.trust import cache_dir
+
+    return cache_dir() / "impostazioni.json"
+
+
+def settings() -> dict:
+    """Impostazioni dell'interfaccia (per ora la lingua); quelle mancanti prendono il valore di default."""
+    from wmt_pdf.i18n import normalize, system_language
+
+    try:
+        data = json.loads(_settings_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    data = data if isinstance(data, dict) else {}
+    return {"language": normalize(data.get("language")) or normalize(os.environ.get("WPDF_LANG")) or system_language()}
+
+
+def save_settings(values: dict) -> dict:
+    from wmt_pdf.i18n import normalize
+
+    current = settings()
+    language = normalize(values.get("language"))
+    if values.get("language") is not None and language is None:
+        raise ValueError(t("lingua non disponibile"))
+    if language:
+        current["language"] = language
+    target = _settings_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(current, indent=1), encoding="utf-8")
+    return current
 
 
 def recent() -> list[dict]:
@@ -66,15 +101,15 @@ def check_local_path(raw_path: str, for_open: bool) -> Path:
     """Solo percorsi locali assoluti; niente percorsi di rete (su Windows aprirli invia le credenziali)."""
     text = str(raw_path or "")
     if text.startswith(("\\\\", "//")) or not text:
-        raise ValueError("percorsi di rete non ammessi")
+        raise ValueError(t("percorsi di rete non ammessi"))
     path = Path(text)
     if not path.is_absolute():
-        raise ValueError("percorso non valido")
+        raise ValueError(t("percorso non valido"))
     if for_open:
         if path.suffix.lower() not in (".pdf", ".p7m"):
-            raise ValueError("si aprono solo file PDF o p7m")
+            raise ValueError(t("si aprono solo file PDF o p7m"))
         if not path.is_file():
-            raise ValueError("file non trovato")
+            raise ValueError(t("file non trovato"))
     return path
 
 
@@ -97,7 +132,7 @@ class DocumentStore:
     def get(self, doc_id: str) -> Document:
         doc = self.docs.get(doc_id) if isinstance(doc_id, str) else None
         if doc is None:
-            raise ValueError("documento sconosciuto")
+            raise ValueError(t("documento sconosciuto"))
         return doc
 
     def open_file(self, file_id: str) -> Document:
@@ -109,13 +144,13 @@ class DocumentStore:
     def open_path(self, raw_path: str) -> Document:
         path = check_local_path(raw_path, for_open=True)
         if not self._is_allowed(path):
-            raise ValueError("file non scelto dalla finestra «Apri» né tra i recenti")
+            raise ValueError(t("file non scelto dalla finestra «Apri» né tra i recenti"))
         with path.open("rb") as f:
             head = f.read(1024)
         if path.suffix.lower() == ".pdf" and b"%PDF" not in head:
-            raise ValueError("il file non è un PDF")
+            raise ValueError(t("il file non è un PDF"))
         if path.stat().st_size > 500 * 1024 * 1024:
-            raise ValueError("file troppo grande")
+            raise ValueError(t("file troppo grande"))
         copy_dir = self.server.workdir / "file" / uuid.uuid4().hex
         copy_dir.mkdir(parents=True)
         copy = copy_dir / path.name
@@ -180,25 +215,25 @@ class DocumentStore:
         if raw_path:
             target = check_local_path(raw_path, for_open=False)
             if not self._is_allowed(target):
-                raise ValueError("percorso non scelto dalla finestra «Salva con nome»")
+                raise ValueError(t("percorso non scelto dalla finestra «Salva con nome»"))
             if target.suffix.lower() != ".pdf":
                 target = target.with_name(target.name + ".pdf")
         elif doc.path is not None:
             if doc.path.suffix.lower() != ".pdf":
                 # Un .p7m è una busta firmata: riscriverlo con il PDF modificato cancellerebbe la firma.
-                raise ValueError("il documento viene da un file firmato (.p7m): usa «Salva con nome» per un PDF nuovo")
+                raise ValueError(t("il documento viene da un file firmato (.p7m): usa «Salva con nome» per un PDF nuovo"))
             target = doc.path
         else:
-            raise ValueError("serve un percorso: usa «Salva con nome»")
+            raise ValueError(t("serve un percorso: usa «Salva con nome»"))
         tmp = target.with_name(f".{target.name}.wmt-pdf.tmp")
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(self.current(doc), tmp)
             tmp.replace(target)  # sostituzione in un colpo: niente file a metà se qualcosa va storto
         except OSError as exc:
-            reason = "il file è aperto in un altro programma o è in sola lettura" \
+            reason = t("il file è aperto in un altro programma o è in sola lettura") \
                 if isinstance(exc, PermissionError) else exc.strerror or str(exc)
-            raise ValueError(f"salvataggio non riuscito: {reason}") from None
+            raise ValueError(t("salvataggio non riuscito: {reason}", reason=reason)) from None
         finally:
             tmp.unlink(missing_ok=True)
         doc.path, doc.name, doc.saved_index = target, target.name, doc.index

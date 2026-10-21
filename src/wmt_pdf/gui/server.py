@@ -25,8 +25,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from wmt_pdf.gui.documents import DocumentStore, forget, recent
+from wmt_pdf.gui.documents import DocumentStore, forget, recent, save_settings, settings
 from wmt_pdf.gui.tools import TOOLS, build_args, catalog
+from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError
 
 STATIC = Path(__file__).parent / "static"
@@ -53,6 +54,7 @@ class GuiServer(ThreadingHTTPServer):
         (workdir / "file").mkdir(parents=True, exist_ok=True)
         self.documents = DocumentStore(self)
         self.desktop = False  # True nella finestra nativa: si possono aprire e salvare file per percorso
+        self.language = "it"  # lingua dell'interfaccia e dei comandi che esegue (vedi set_language)
 
     def register(self, path: Path) -> dict:
         file_id = uuid.uuid4().hex
@@ -67,16 +69,16 @@ class GuiServer(ThreadingHTTPServer):
 
     def resolve(self, file_id: str) -> Path:
         if not isinstance(file_id, str) or not ID.fullmatch(file_id) or file_id not in self.files:
-            raise ValueError("file sconosciuto")
+            raise ValueError(t("file sconosciuto"))
         return self.files[file_id]
 
     def execute(self, tool_id, raw_inputs, raw_options) -> dict:
         """Esegue uno strumento del catalogo; ValueError per richieste non valide."""
         tool = TOOLS.get(str(tool_id))
         if tool is None:
-            raise ValueError("strumento sconosciuto")
+            raise ValueError(t("strumento sconosciuto"))
         if not isinstance(raw_inputs, list) or not isinstance(raw_options, dict):
-            raise ValueError("richiesta non valida")  # noqa: TRY004 - diventa una risposta 400
+            raise ValueError(t("richiesta non valida"))  # noqa: TRY004 - diventa una risposta 400
         inputs = [self.resolve(i) for i in raw_inputs]
         options = dict(raw_options)
         for opt in tool.options:  # le opzioni di tipo file arrivano come id
@@ -96,6 +98,11 @@ class GuiServer(ThreadingHTTPServer):
         stderr = stderr.replace(str(outdir) + os.sep, "").replace(str(self.workdir), "…")
         return {"code": code, "stdout": stdout, "stderr": stderr, "outputs": outputs}
 
+    def set_language(self, language: str) -> None:
+        from wmt_pdf.i18n import set_language
+
+        self.language = set_language(language)  # anche per i messaggi del server stesso
+
     def invoke(self, argv: list[str], env: dict[str, str]) -> tuple[int, str, str]:
         from wmt_pdf.cli import main
 
@@ -107,11 +114,11 @@ class GuiServer(ThreadingHTTPServer):
             try:
                 with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                     try:
-                        code = main(argv)
+                        code = main([f"--language={self.language}", *argv])
                     except SystemExit:  # argparse rifiuta gli argomenti
                         code = EXIT_USAGE
                     except Exception as exc:  # noqa: BLE001 - l'interfaccia deve sempre ricevere una risposta
-                        print(f"wpdf: errore interno ({type(exc).__name__}): {exc}", file=err)
+                        print(t("wpdf: errore interno ({name}): {exc}", name=type(exc).__name__, exc=exc), file=err)
                         code = 1
             finally:
                 for key in env:
@@ -136,7 +143,9 @@ def _safe_name(name: str) -> str:
 
 def make_server(workdir: Path, port: int = 0) -> GuiServer:
     workdir.mkdir(parents=True, exist_ok=True)
-    return GuiServer(("127.0.0.1", port), workdir)
+    server = GuiServer(("127.0.0.1", port), workdir)
+    server.set_language(settings()["language"])
+    return server
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -187,32 +196,35 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if not self._local_host():
-            return self._error(403, "host non ammesso")
+            return self._error(403, t("host non ammesso"))
         path = urlparse(self.path).path
         if path in ("/", "/index.html", "/compact"):
             page = "compact.html" if path == "/compact" else "index.html"
             html = (STATIC / page).read_text(encoding="utf-8").replace("__TOKEN__", self.server.token)
+            html = html.replace('<html lang="it">', f'<html lang="{self.server.language}">', 1)
             return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
         if path.startswith("/static/"):
             return self._static(unquote(path[len("/static/"):]))
         if not path.startswith("/api/"):
-            return self._error(404, "pagina inesistente")
+            return self._error(404, t("pagina inesistente"))
         if not self._authorized():
-            return self._error(403, "accesso negato")
+            return self._error(403, t("accesso negato"))
         if path == "/api/tools":
             return self._json(200, catalog())
         if path == "/api/recent":
             return self._json(200, {"desktop": self.server.desktop, "files": recent() if self.server.desktop else []})
+        if path == "/api/settings":
+            return self._json(200, settings())
         if path.startswith("/api/doc/"):
             return self._doc_get(path[len("/api/doc/"):])
         if path.startswith("/api/file/"):
             return self._file(unquote(path[len("/api/file/"):]))
-        return self._error(404, "risorsa inesistente")
+        return self._error(404, t("risorsa inesistente"))
 
     def _static(self, rel: str) -> None:
         target = (STATIC / rel).resolve()
         if not target.is_relative_to(STATIC.resolve()) or not target.is_file():
-            return self._error(404, "file inesistente")
+            return self._error(404, t("file inesistente"))
         content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         if target.suffix == ".mjs":
             content_type = "text/javascript"
@@ -222,7 +234,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             path = self.server.resolve(file_id)
         except ValueError:
-            return self._error(404, "file sconosciuto")
+            return self._error(404, t("file sconosciuto"))
         download = "download=1" in (urlparse(self.path).query or "")
         content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         quoted = path.name.encode("ascii", "replace").decode().replace('"', "_")
@@ -240,46 +252,50 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         if not self._local_host():
-            return self._error(403, "host non ammesso")
+            return self._error(403, t("host non ammesso"))
         path = urlparse(self.path).path
         if not self._authorized():
-            return self._error(403, "accesso negato")
+            return self._error(403, t("accesso negato"))
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = -1
         if length < 0:
-            return self._error(411, "lunghezza della richiesta mancante")
+            return self._error(411, t("lunghezza della richiesta mancante"))
         if length > MAX_UPLOAD:
-            return self._error(413, "file troppo grande")
+            return self._error(413, t("file troppo grande"))
         if path == "/api/upload":
             if self.server.uploaded + length > MAX_SESSION:
-                return self._error(413, "spazio della sessione esaurito: chiudi e riapri wmt-pdf")
+                return self._error(413, t("spazio della sessione esaurito: chiudi e riapri wmt-pdf"))
             return self._upload(length)
         if length > 1024 * 1024:
-            return self._error(413, "richiesta troppo grande")
+            return self._error(413, t("richiesta troppo grande"))
         try:
             request = json.loads(self.rfile.read(length) or b"{}")
         except ValueError:
-            return self._error(400, "richiesta non valida")
+            return self._error(400, t("richiesta non valida"))
         if not isinstance(request, dict):
-            return self._error(400, "richiesta non valida")
+            return self._error(400, t("richiesta non valida"))
         try:
             if path == "/api/run":
                 return self._json(200, self.server.execute(request.get("tool"), request.get("inputs") or [],
                                                            request.get("options") or {}))
             if path.startswith("/api/doc"):
                 return self._doc_post(path, request)
+            if path == "/api/settings":
+                values = save_settings(request)
+                self.server.set_language(values["language"])
+                return self._json(200, values)
             if path == "/api/recent/forget":
                 if not self.server.desktop:
-                    return self._error(400, "i file recenti esistono solo nella finestra di wmt-pdf")
+                    return self._error(400, t("i file recenti esistono solo nella finestra di wmt-pdf"))
                 forget(str(request.get("path", "")))
                 return self._json(200, {"files": recent()})
         except ValueError as exc:
             return self._error(400, str(exc))
         except OSError as exc:  # disco: file bloccato, permessi, spazio
-            return self._error(400, f"operazione sul disco non riuscita: {exc.strerror or exc}")
-        return self._error(404, "risorsa inesistente")
+            return self._error(400, t("operazione sul disco non riuscita: {reason}", reason=exc.strerror or exc))
+        return self._error(404, t("risorsa inesistente"))
 
     def _upload(self, length: int) -> None:
         name = _safe_name(unquote(self.headers.get("X-File-Name", "file")))
@@ -317,7 +333,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, [o.__dict__ for o in items])
         except (ValueError, CliError) as exc:
             return self._error(400, str(exc))
-        return self._error(404, "risorsa inesistente")
+        return self._error(404, t("risorsa inesistente"))
 
     def _doc_post(self, path: str, request: dict) -> None:
         with self.server.documents.lock:
@@ -328,7 +344,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/doc/open":
             if request.get("path"):
                 if not self.server.desktop:
-                    raise ValueError("aprire per percorso è possibile solo nella finestra di wmt-pdf")
+                    raise ValueError(t("aprire per percorso è possibile solo nella finestra di wmt-pdf"))
                 doc = store.open_path(request["path"])
             else:
                 doc = store.open_file(str(request.get("file_id", "")))
@@ -340,7 +356,7 @@ class Handler(BaseHTTPRequestHandler):
             extra, position = request.get("files"), request.get("position", "end")
             if extra is not None:  # «Unisci»: altri file prima o dopo il documento aperto
                 if request.get("tool") != "merge" or not isinstance(extra, list) or position not in ("start", "end"):
-                    raise ValueError("file aggiunti ammessi solo per «Unisci», all'inizio o in fondo")
+                    raise ValueError(t("file aggiunti ammessi solo per «Unisci», all'inizio o in fondo"))
                 for file_id in extra:
                     self.server.resolve(file_id)
                 inputs = extra + inputs if position == "start" else inputs + extra
@@ -360,10 +376,10 @@ class Handler(BaseHTTPRequestHandler):
             store.redo(doc)
         elif action == "save":
             if not self.server.desktop and (request.get("path") or doc.path):
-                raise ValueError("salvare su disco è possibile solo nella finestra di wmt-pdf: usa «Scarica»")
+                raise ValueError(t("salvare su disco è possibile solo nella finestra di wmt-pdf: usa «Scarica»"))
             store.save(doc, request.get("path"))
         else:
-            return self._error(404, "azione sconosciuta")
+            return self._error(404, t("azione sconosciuta"))
         return self._json(200, store.state(doc))
 
 
@@ -373,7 +389,7 @@ def serve(workdir: Path, port: int = 0, open_window: bool = True) -> None:
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    print(f"wmt-pdf: interfaccia su {url} (Ctrl+C per chiudere)")
+    print(t("wmt-pdf: interfaccia su {url} (Ctrl+C per chiudere)", url=url))
     try:
         if open_window:
             try:
@@ -504,4 +520,5 @@ class DesktopApi:
         if not unsaved:
             return True
         return self._window.create_confirmation_dialog(
-            "Modifiche non salvate", f"{', '.join(unsaved)}: le modifiche non salvate andranno perse. Chiudere?")
+            t("Modifiche non salvate"),
+            t("{names}: le modifiche non salvate andranno perse. Chiudere?", names=", ".join(unsaved)))

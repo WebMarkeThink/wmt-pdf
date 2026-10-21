@@ -20,6 +20,7 @@ from wmt_pdf.extract import (
     to_csv,
     to_markdown,
 )
+from wmt_pdf.i18n import LANGUAGES, N_, t, take_language_option
 from wmt_pdf.pages import parse_pages
 from wmt_pdf.source import (
     CliError,
@@ -43,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
                 reconfigure(encoding="utf-8")
             except ValueError:
                 pass
+    argv = take_language_option(list(sys.argv[1:] if argv is None else argv))
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
@@ -62,63 +64,66 @@ def main(argv: list[str] | None = None) -> int:
         if os.environ.get("WPDF_DEBUG"):
             raise
         detail = str(exc).strip().splitlines()[0][:300] if str(exc).strip() else ""
-        print(f"wpdf: errore ({type(exc).__name__}){': ' + detail if detail else ''}", file=sys.stderr)
-        print("wpdf: imposta WPDF_DEBUG=1 per i dettagli", file=sys.stderr)
+        print(t("wpdf: errore ({name}){v}", name=type(exc).__name__, v=': ' + detail if detail else ''), file=sys.stderr)
+        print(t("wpdf: imposta WPDF_DEBUG=1 per i dettagli"), file=sys.stderr)
         return EXIT_ERROR
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="wpdf",
-        description="Legge PDF e p7m come testo compatto. Le immagini solo su richiesta (render).",
+        description=t("Legge PDF e p7m come testo compatto. Le immagini solo su richiesta (render)."),
     )
     parser.add_argument("--version", action="version", version=f"wpdf {__version__}")
+    # Letta prima di argparse (take_language_option): qui solo per l'aiuto.
+    parser.add_argument("--language", choices=LANGUAGES,
+                        help=t("lingua dei messaggi: it o en (di default WPDF_LANG o quella del sistema)"))
     sub = parser.add_subparsers(metavar="comando")
 
     def add(name: str, func, help_text: str, pdf: bool = True) -> argparse.ArgumentParser:
         p = sub.add_parser(name, help=help_text, description=help_text)
-        p.add_argument("file", help="PDF oppure .p7m")
+        p.add_argument("file", help=t("PDF oppure .p7m"))
         if pdf:
             add_password_args(p)
         p.set_defaults(func=func)
         return p
 
-    p = add("info", cmd_info, "Panoramica: pagine, metadati, pagine scansionate, firme, token stimati")
+    p = add("info", cmd_info, t("Panoramica: pagine, metadati, pagine scansionate, firme, token stimati"))
     p.add_argument("--json", action="store_true")
 
-    p = add("text", cmd_text, "Testo per pagina in Markdown, con tabelle e OCR delle scansioni")
-    p.add_argument("--pages", help="es. 1-3,7 oppure 5- oppure last")
-    p.add_argument("--max-tokens", type=int, help="budget indicativo; oltre si tronca e si indica come continuare")
-    p.add_argument("--from-char", type=int, default=0, help="salta i primi N caratteri della prima pagina (per continuare)")
+    p = add("text", cmd_text, t("Testo per pagina in Markdown, con tabelle e OCR delle scansioni"))
+    p.add_argument("--pages", help=t("es. 1-3,7 oppure 5- oppure last"))
+    p.add_argument("--max-tokens", type=int, help=t("budget indicativo; oltre si tronca e si indica come continuare"))
+    p.add_argument("--from-char", type=int, default=0, help=t("salta i primi N caratteri della prima pagina (per continuare)"))
     p.add_argument("--ocr", choices=["auto", "never", "force"], default="auto")
-    p.add_argument("--lang", default="it", help="lingua OCR (codici PP-OCRv6: it, en, de, fr, es, ...)")
-    p.add_argument("--no-tables", action="store_true", help="niente ricerca tabelle (più veloce)")
-    p.add_argument("--keep-headers", action="store_true", help="non togliere intestazioni e piè di pagina ripetuti")
+    p.add_argument("--lang", default="it", help=t("lingua OCR (codici PP-OCRv6: it, en, de, fr, es, ...)"))
+    p.add_argument("--no-tables", action="store_true", help=t("niente ricerca tabelle (più veloce)"))
+    p.add_argument("--keep-headers", action="store_true", help=t("non togliere intestazioni e piè di pagina ripetuti"))
     p.add_argument("--json", action="store_true")
 
-    p = add("tables", cmd_tables, "Solo le tabelle, in Markdown o CSV")
+    p = add("tables", cmd_tables, t("Solo le tabelle, in Markdown o CSV"))
     p.add_argument("--pages")
     p.add_argument("--csv", action="store_true")
 
-    p = add("search", cmd_search, "Cerca un testo (senza badare a maiuscole e accenti)")
+    p = add("search", cmd_search, t("Cerca un testo (senza badare a maiuscole e accenti)"))
     p.add_argument("query")
     p.add_argument("--pages")
-    p.add_argument("--context", type=int, default=60, help="caratteri attorno al risultato")
+    p.add_argument("--context", type=int, default=60, help=t("caratteri attorno al risultato"))
     p.add_argument("--limit", type=int, default=50)
 
-    p = add("render", cmd_render, "Immagine PNG di una pagina, da far guardare all'agente solo se serve")
+    p = add("render", cmd_render, t("Immagine PNG di una pagina, da far guardare all'agente solo se serve"))
     p.add_argument("--page", default="1")
     p.add_argument("--dpi", type=int, default=100)
-    p.add_argument("--crop", help="porzione x0,y0,x1,y1 in frazioni da 0 a 1, dall'alto a sinistra")
-    p.add_argument("--gray", action="store_true", help="scala di grigi (file più piccolo)")
-    p.add_argument("-o", "--output", help="file PNG di destinazione (sovrascritto se esiste)")
+    p.add_argument("--crop", help=t("porzione x0,y0,x1,y1 in frazioni da 0 a 1, dall'alto a sinistra"))
+    p.add_argument("--gray", action="store_true", help=t("scala di grigi (file più piccolo)"))
+    p.add_argument("-o", "--output", help=t("file PNG di destinazione (sovrascritto se esiste)"))
 
-    p = add("p7m", cmd_p7m, "Firmatari e verifica di un .p7m; con -o estrae il documento", pdf=False)
-    p.add_argument("-o", "--output", help="dove salvare il documento firmato")
-    p.add_argument("--force", action="store_true", help="sovrascrive il file di destinazione se esiste")
+    p = add("p7m", cmd_p7m, t("Firmatari e verifica di un .p7m; con -o estrae il documento"), pdf=False)
+    p.add_argument("-o", "--output", help=t("dove salvare il documento firmato"))
+    p.add_argument("--force", action="store_true", help=t("sovrascrive il file di destinazione se esiste"))
     p.add_argument("--json", action="store_true")
 
-    p = add("signatures", cmd_signatures, "Firme incorporate nel PDF (PAdES) e loro integrità")
+    p = add("signatures", cmd_signatures, t("Firme incorporate nel PDF (PAdES) e loro integrità"))
     p.add_argument("--json", action="store_true")
 
     from wmt_pdf.cli_ops import register
@@ -133,9 +138,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     register_text(sub)
 
-    p = sub.add_parser("gui", help="Apre l'interfaccia grafica", description="Apre l'interfaccia grafica")
-    p.add_argument("--port", type=int, default=0, help="porta locale (di default una libera)")
-    p.add_argument("--no-window", action="store_true", help="non aprire finestra né browser (solo server)")
+    p = sub.add_parser("gui", help=t("Apre l'interfaccia grafica"), description=t("Apre l'interfaccia grafica"))
+    p.add_argument("--port", type=int, default=0, help=t("porta locale (di default una libera)"))
+    p.add_argument("--no-window", action="store_true", help=t("non aprire finestra né browser (solo server)"))
     p.set_defaults(func=cmd_gui)
     return parser
 
@@ -156,8 +161,8 @@ def cmd_gui(args) -> int:
 
 def add_password_args(p: argparse.ArgumentParser) -> None:
     group = p.add_mutually_exclusive_group()
-    group.add_argument("--password", help="password del PDF")
-    group.add_argument("--password-env", metavar="VARIABILE", help="legge la password da una variabile d'ambiente")
+    group.add_argument("--password", help=t("password del PDF"))
+    group.add_argument("--password-env", metavar=t("VARIABILE"), help=t("legge la password da una variabile d'ambiente"))
 
 
 # --- comandi --------------------------------------------------------------
@@ -215,20 +220,19 @@ def cmd_info(args) -> int:
     if banner:
         lines.append(banner)
     w, h = info["page_size_mm"]
-    lines.append(f"Pagine: {count} · PDF {info['pdf_version']} · {w}×{h} mm")
-    labels = {"Title": "Titolo", "Author": "Autore", "Subject": "Oggetto", "Creator": "Creato con",
-              "Producer": "Prodotto da", "CreationDate": "Creato il", "ModDate": "Modificato il"}
+    lines.append(t("Pagine: {count} · PDF {v} · {w}×{h} mm", count=count, v=info['pdf_version'], w=w, h=h))
+    labels = {"Title": N_("Titolo"), "Author": N_("Autore"), "Subject": N_("Oggetto"), "Creator": N_("Creato con"),
+              "Producer": N_("Prodotto da"), "CreationDate": N_("Creato il"), "ModDate": N_("Modificato il")}
     for key, label in labels.items():
         if key in meta:
-            lines.append(f"{label}: {meta[key]}")
+            lines.append(f"{t(label)}: {meta[key]}")
     with_text = count - len(scanned) - len(blank)
-    scan = f" ({_ranges(scanned)}: usa OCR o render)" if scanned else ""
-    empty = f" · vuote: {len(blank)} ({_ranges(blank)})" if blank else ""
-    lines.append(f"Pagine con testo: {with_text} · senza testo: {len(scanned)}{scan}{empty}")
-    lines.append(f"Testo stimato: ~{info['estimated_tokens']} token")
+    scan = t(" ({ranges}: usa OCR o render)", ranges=_ranges(scanned)) if scanned else ""
+    empty = t(" · vuote: {n} ({ranges})", n=len(blank), ranges=_ranges(blank)) if blank else ""
+    lines.append(t("Pagine con testo: {with_text} · senza testo: {len}{scan}{empty}", with_text=with_text, len=len(scanned), scan=scan, empty=empty))
+    lines.append(t("Testo stimato: ~{v} token", v=info['estimated_tokens']))
     lines.append(
-        f"Firme: {info['signatures']} · Allegati: {info['attachments']} · "
-        f"Indice: {info['toc_entries']} voci · Accessibile (tagged): {'sì' if info['tagged'] else 'no'}"
+        t("Firme: {v} · Allegati: {v2} · Indice: {v3} voci · Accessibile (tagged): {v4}", v=info['signatures'], v2=info['attachments'], v3=info['toc_entries'], v4=t('sì') if info['tagged'] else t('no'))
     )
     print("\n".join(lines))
     return EXIT_OK
@@ -246,12 +250,12 @@ def cmd_text(args) -> int:
         doc.close()
 
     budget = args.max_tokens
-    header = [f"# {source.name} — {total} pagine"]
+    header = [t("# {name} — {total} pagine", name=source.name, total=total)]
     banner = p7m_banner(source)
     if banner:
         header.append(banner)
     if removed:
-        header.append("> Righe ripetute in ogni pagina, tolte: " + "; ".join(f"«{r}»" for r in removed))
+        header.append(t("> Righe ripetute in ogni pagina, tolte: {join}", join="; ".join(f"«{r}»" for r in removed)))
     out = "\n".join(header) + "\n"
     if args.from_char and pages:
         first = pages[0]
@@ -297,10 +301,11 @@ def cmd_text(args) -> int:
         page, offset = truncated_at
         spec = _next_spec(truncated_at, numbers)
         if offset is None:
-            hint = f"fermo prima della pagina {page}: continua con --pages {spec}"
+            hint = t("fermo prima della pagina {page}: continua con --pages {spec}", page=page, spec=spec)
         else:
-            hint = f"pagina {page} tagliata: continua con --pages {spec} --from-char {offset}"
-        out += f"\n… [troncato a ~{budget} token, {hint}]\n"
+            hint = t("pagina {page} tagliata: continua con --pages {spec} --from-char {offset}", page=page, spec=spec,
+                     offset=offset)
+        out += "\n" + t("… [troncato a ~{budget} token, {hint}]", budget=budget, hint=hint) + "\n"
     sys.stdout.write(out)
     return EXIT_OK
 
@@ -308,12 +313,12 @@ def cmd_text(args) -> int:
 def _page_block(item) -> str:
     tags = []
     if item.ocr:
-        tags.append("testo da OCR")
+        tags.append(t("testo da OCR"))
     if item.tables:
-        tags.append(f"tabelle: {len(item.tables)}")
+        tags.append(t("tabelle: {len}", len=len(item.tables)))
     if item.images and not item.ocr:
-        tags.append(f"immagini: {item.images}")
-    title = f"## Pagina {item.page}" + (f" ({', '.join(tags)})" if tags else "")
+        tags.append(t("immagini: {images}", images=item.images))
+    title = "## " + t("Pagina {page}", page=item.page) + (f" ({', '.join(tags)})" if tags else "")
     body = item.text
     if item.note:
         body = (body + "\n" if body else "") + f"[{item.note}]"
@@ -348,14 +353,14 @@ def cmd_tables(args) -> int:
             plumber_page.close()
             for k, rows in enumerate(tables, start=1):
                 found += 1
-                print(f"### Pagina {n}, tabella {k}")
+                print(t("### Pagina {n}, tabella {k}", n=n, k=k))
                 print(to_csv(rows) if args.csv else to_markdown(rows))
                 print()
     finally:
         extractor.close()
         doc.close()
     if not found:
-        print("Nessuna tabella trovata.")
+        print(t("Nessuna tabella trovata."))
     return EXIT_OK
 
 
@@ -363,7 +368,7 @@ def cmd_search(args) -> int:
     _, doc = _open(args)
     needle = fold(args.query)
     if not needle:
-        raise CliError("testo da cercare vuoto")
+        raise CliError(t("testo da cercare vuoto"))
     hits = []
     try:
         for n in parse_pages(args.pages, len(doc)):
@@ -385,21 +390,21 @@ def cmd_search(args) -> int:
         doc.close()
     for n, snippet in hits[: args.limit]:
         print(f"p.{n}: {snippet}")
-    more = f" (mostrati {args.limit})" if len(hits) > args.limit else ""
-    word = "risultato" if len(hits) == 1 else "risultati"
-    print(f"{len(hits)} {word}{more}")
+    more = t(" (mostrati {limit})", limit=args.limit) if len(hits) > args.limit else ""
+    found = t("1 risultato") if len(hits) == 1 else t("{n} risultati", n=len(hits))
+    print(f"{found}{more}")
     return EXIT_OK
 
 
 def cmd_render(args) -> int:
     if not MIN_DPI <= args.dpi <= MAX_DPI:
-        raise CliError(f"--dpi tra {MIN_DPI} e {MAX_DPI}")
+        raise CliError(t("--dpi tra {MIN_DPI} e {MAX_DPI}", MIN_DPI=MIN_DPI, MAX_DPI=MAX_DPI))
     source, doc = _open(args)
     doc.init_forms()  # senza, PDFium non disegna i campi dei moduli
     try:
         number = parse_pages(args.page, len(doc))
         if len(number) != 1:
-            raise CliError("render lavora su una pagina alla volta: --page N")
+            raise CliError(t("render lavora su una pagina alla volta: --page N"))
         page = doc[number[0] - 1]
         try:
             image = page.render(scale=args.dpi / 72).to_pil()
@@ -411,15 +416,15 @@ def cmd_render(args) -> int:
         try:
             x0, y0, x1, y1 = (float(v) for v in args.crop.split(","))
         except ValueError:
-            raise CliError("--crop vuole quattro numeri: x0,y0,x1,y1") from None
+            raise CliError(t("--crop vuole quattro numeri: x0,y0,x1,y1")) from None
         if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1):
-            raise CliError("--crop: frazioni tra 0 e 1, con x0<x1 e y0<y1")
+            raise CliError(t("--crop: frazioni tra 0 e 1, con x0<x1 e y0<y1"))
         w, h = image.size
         image = image.crop((round(x0 * w), round(y0 * h), round(x1 * w), round(y1 * h)))
     image = image.convert("L" if args.gray else "RGB")
     target = Path(args.output) if args.output else Path.cwd() / f"{Path(source.name).stem}_p{number[0]}.png"
     if target.resolve() == Path(args.file).resolve():
-        raise CliError("la destinazione coincide con il file di partenza")
+        raise CliError(t("la destinazione coincide con il file di partenza"))
     image.save(target, optimize=True)
     print(f"{target} ({image.size[0]}×{image.size[1]} px, {_kb(target.stat().st_size)})")
     return EXIT_OK
@@ -440,7 +445,7 @@ def cmd_p7m(args) -> int:
         print(json.dumps(_p7m_summary(result) | {"saved_to": args.output}, ensure_ascii=False, indent=1, default=str))
         return EXIT_OK if result.ok else EXIT_INVALID_SIGNATURE
 
-    lines = [f"File: {Path(args.file).name} · livelli di firma: {len(result.layers)}"]
+    lines = [t("File: {name} · livelli di firma: {n}", name=Path(args.file).name, n=len(result.layers))]
     for depth, layer in enumerate(result.layers, start=1):
         for s in layer:
             who = s.name or "?"
@@ -448,19 +453,19 @@ def cmd_p7m(args) -> int:
                 who += f" (CF {s.fiscal_code})"
             if s.organization:
                 who += f", {s.organization}"
-            lines.append(f"- Livello {depth}: {who}")
-            lines.append(f"  Certificatore: {s.issuer or '?'} · certificato valido {_d(s.not_before)} → {_d(s.not_after)}")
-            when = _dt(s.signing_time) if s.signing_time else "non dichiarata"
-            lines.append(f"  Data di firma dichiarata: {when}")
-            state = "integra e corrispondente al certificato" if s.ok else f"NON valida: {s.problem}"
-            lines.append(f"  Firma: {state} · impronta {s.digest_algorithm}")
+            lines.append(t("- Livello {depth}: {who}", depth=depth, who=who))
+            lines.append(t("  Certificatore: {v} · certificato valido {d} → {d2}", v=s.issuer or '?', d=_d(s.not_before), d2=_d(s.not_after)))
+            when = _dt(s.signing_time) if s.signing_time else t("non dichiarata")
+            lines.append(t("  Data di firma dichiarata: {when}", when=when))
+            state = t("integra e corrispondente al certificato") if s.ok else t("NON valida: {problem}", problem=s.problem)
+            lines.append(t("  Firma: {state} · impronta {digest_algorithm}", state=state, digest_algorithm=s.digest_algorithm))
             if s.cert_valid_at_signing is False:
-                lines.append("  Attenzione: alla data di firma il certificato non era valido")
-    lines.append(f"Contenuto: {result.content_kind}, {_kb(len(result.content))}")
+                lines.append(t("  Attenzione: alla data di firma il certificato non era valido"))
+    lines.append(t("Contenuto: {content_kind}, {kb}", content_kind=t(result.content_kind), kb=_kb(len(result.content))))
     if args.output:
-        warn = " (ATTENZIONE: firma non valida, il contenuto può essere alterato)" if not result.ok else ""
-        lines.append(f"Salvato in: {args.output}{warn}")
-    lines.append("Non verificati: certificatore fidato (elenco europeo) e revoca del certificato.")
+        warn = t(" (ATTENZIONE: firma non valida, il contenuto può essere alterato)") if not result.ok else ""
+        lines.append(t("Salvato in: {output}{warn}", output=args.output, warn=warn))
+    lines.append(t("Non verificati: certificatore fidato (elenco europeo) e revoca del certificato."))
     print("\n".join(lines))
     return EXIT_OK if result.ok else EXIT_INVALID_SIGNATURE
 
@@ -473,28 +478,28 @@ def cmd_signatures(args) -> int:
     if args.json:
         print(json.dumps([s.__dict__ for s in sigs], ensure_ascii=False, indent=1, default=str))
     elif not sigs:
-        print("Nessuna firma nel PDF.")
+        print(t("Nessuna firma nel PDF."))
     else:
-        lines = [f"Firme nel PDF: {len(sigs)}"]
+        lines = [t("Firme nel PDF: {n}", n=len(sigs))]
         for s in sigs:
             who = s.name or "?"
             if s.fiscal_code:
                 who += f" (CF {s.fiscal_code})"
             lines.append(f"- {s.field}: {who} · {s.subfilter or '?'}")
-            lines.append(f"  Certificatore: {s.issuer or '?'} · data dichiarata: {_dt(s.signing_time) if s.signing_time else 'non dichiarata'}")
+            lines.append(t("  Certificatore: {v} · data dichiarata: {v2}", v=s.issuer or '?', v2=_dt(s.signing_time) if s.signing_time else t('non dichiarata')))
             if s.error:
-                lines.append(f"  Firma: NON verificabile: {s.error}")
+                lines.append(t("  Firma: NON verificabile: {error}", error=s.error))
             else:
                 if s.ok:
-                    state = "integra e corrispondente al certificato"
+                    state = t("integra e corrispondente al certificato")
                 elif s.intact and s.valid:
-                    state = "NON valida: il documento è stato modificato dopo la firma"
+                    state = t("NON valida: il documento è stato modificato dopo la firma")
                 else:
-                    state = "NON valida: contenuto alterato o firma non corrispondente"
-                lines.append(f"  Firma: {state} · copre {s.coverage}")
+                    state = t("NON valida: contenuto alterato o firma non corrispondente")
+                lines.append(t("  Firma: {state} · copre {coverage}", state=state, coverage=t(s.coverage)))
                 if s.modification:
-                    lines.append(f"  Dopo la firma: {s.modification}")
-        lines.append("Non verificati: certificatore fidato (elenco europeo) e revoca del certificato.")
+                    lines.append(t("  Dopo la firma: {modification}", modification=t(s.modification)))
+        lines.append(t("Non verificati: certificatore fidato (elenco europeo) e revoca del certificato."))
         print("\n".join(lines))
     return EXIT_OK if all(s.ok for s in sigs) else EXIT_INVALID_SIGNATURE
 
@@ -531,8 +536,8 @@ def _dt(value) -> str:
 
 def _ranges(numbers: list[int]) -> str:
     if len(numbers) > 8:
-        return f"pagine {numbers[0]}…{numbers[-1]}"
-    return "pagine " + ", ".join(map(str, numbers))
+        return t("pagine {first}…{last}", first=numbers[0], last=numbers[-1])
+    return t("pagine {numbers}", numbers=", ".join(map(str, numbers)))
 
 
 if __name__ == "__main__":

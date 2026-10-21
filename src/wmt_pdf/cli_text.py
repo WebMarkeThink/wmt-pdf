@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from wmt_pdf.i18n import t
 from wmt_pdf.pages import parse_pages
 from wmt_pdf.source import CliError, check_target, load_source, resolve_password
 
@@ -24,46 +25,46 @@ def register(sub) -> None:
         p.set_defaults(func=func)
         return p
 
-    p = add("textobjects", cmd_textobjects, "Pezzi di testo di una pagina con posizione, font e corpo", output=False)
+    p = add("textobjects", cmd_textobjects, t("Pezzi di testo di una pagina con posizione, font e corpo"), output=False)
     p.add_argument("--page", type=int, default=1)
     p.add_argument("--json", action="store_true")
 
-    p = add("replace", cmd_replace, "Sostituisce un testo in tutto il documento (o nelle pagine indicate)")
-    p.add_argument("find", help="testo da cercare (maiuscole e minuscole contano)")
-    p.add_argument("replacement", help="testo nuovo")
+    p = add("replace", cmd_replace, t("Sostituisce un testo in tutto il documento (o nelle pagine indicate)"))
+    p.add_argument("find", help=t("testo da cercare (maiuscole e minuscole contano)"))
+    p.add_argument("replacement", help=t("testo nuovo"))
     p.add_argument("--pages")
 
-    p = add("edittext", cmd_edittext, "Cambia un pezzo di testo, scelto per posizione o per indice")
+    p = add("edittext", cmd_edittext, t("Cambia un pezzo di testo, scelto per posizione o per indice"))
     p.add_argument("--page", type=int, required=True)
     where = p.add_mutually_exclusive_group(required=True)
-    where.add_argument("--at", help="punto x,y in punti PDF (dal basso a sinistra) sopra il testo")
-    where.add_argument("--index", type=int, help="indice da `wpdf textobjects`")
-    p.add_argument("--text", required=True, help="testo nuovo (vuoto per eliminarlo)")
+    where.add_argument("--at", help=t("punto x,y in punti PDF (dal basso a sinistra) sopra il testo"))
+    where.add_argument("--index", type=int, help=t("indice da `wpdf textobjects`"))
+    p.add_argument("--text", required=True, help=t("testo nuovo (vuoto per eliminarlo)"))
 
-    p = add("movetext", cmd_movetext, "Sposta un pezzo di testo (stesso font e caratteri)")
+    p = add("movetext", cmd_movetext, t("Sposta un pezzo di testo (stesso font e caratteri)"))
     p.add_argument("--page", type=int, required=True)
-    p.add_argument("--index", type=int, required=True, help="indice da `wpdf textobjects`")
+    p.add_argument("--index", type=int, required=True, help=t("indice da `wpdf textobjects`"))
     where = p.add_mutually_exclusive_group(required=True)
-    where.add_argument("--by", help="spostamento dx,dy in punti (y verso l'alto)")
-    where.add_argument("--to", help="nuova origine x,y del testo (linea di base), in punti dal basso a sinistra")
+    where.add_argument("--by", help=t("spostamento dx,dy in punti (y verso l'alto)"))
+    where.add_argument("--to", help=t("nuova origine x,y del testo (linea di base), in punti dal basso a sinistra"))
 
-    p = add("objects", cmd_objects, "Oggetti della pagina che si possono spostare (testo, immagini, grafica, annotazioni)",
+    p = add("objects", cmd_objects, t("Oggetti della pagina che si possono spostare (testo, immagini, grafica, annotazioni)"),
             output=False)
     p.add_argument("--page", type=int, default=1)
     p.add_argument("--json", action="store_true")
 
-    p = add("move", cmd_move, "Sposta un oggetto della pagina: testo, immagine, firma grafica, timbro, annotazione")
+    p = add("move", cmd_move, t("Sposta un oggetto della pagina: testo, immagine, firma grafica, timbro, annotazione"))
     p.add_argument("--page", type=int, required=True)
     p.add_argument("--kind", required=True, choices=("text", "image", "graphic", "annotation"))
-    p.add_argument("--index", type=int, required=True, help="indice da `wpdf objects`")
+    p.add_argument("--index", type=int, required=True, help=t("indice da `wpdf objects`"))
     where = p.add_mutually_exclusive_group(required=True)
-    where.add_argument("--by", help="spostamento dx,dy in punti (y verso l'alto)")
-    where.add_argument("--to", help="nuovo angolo in basso a sinistra x,y, in punti dal basso a sinistra")
+    where.add_argument("--by", help=t("spostamento dx,dy in punti (y verso l'alto)"))
+    where.add_argument("--to", help=t("nuovo angolo in basso a sinistra x,y, in punti dal basso a sinistra"))
 
-    p = add("addtext", cmd_addtext, "Aggiunge testo in una posizione della pagina")
+    p = add("addtext", cmd_addtext, t("Aggiunge testo in una posizione della pagina"))
     p.add_argument("--page", type=int, required=True)
-    p.add_argument("--at", required=True, help="inizio della prima riga, x,y in punti PDF dal basso a sinistra")
-    p.add_argument("--text", required=True, help="testo; \\n per andare a capo")
+    p.add_argument("--at", required=True, help=t("inizio della prima riga, x,y in punti PDF dal basso a sinistra"))
+    p.add_argument("--text", required=True, help=t("testo; \\n per andare a capo"))
     p.add_argument("--size", type=float, default=11)
     p.add_argument("--color", default="#000000", help="es. #c00000")
     p.add_argument("--bold", action="store_true")
@@ -73,7 +74,7 @@ def _point(text: str, option: str = "--at") -> tuple[float, float]:
     try:
         x, y = (float(v) for v in text.split(","))
     except ValueError:
-        raise CliError(f"{option} vuole due numeri: x,y") from None
+        raise CliError(t("{option} vuole due numeri: x,y", option=option)) from None
     return x, y
 
 
@@ -85,12 +86,11 @@ def _prepare(args):
 
 
 def _report(target: Path, result, what: str) -> None:
-    extra = f", {result.recreated} riscritti con un font di sistema (le lettere nuove mancavano nel font originale)" \
-        if result.recreated else ""
+    extra = t(", {n} riscritti con un font di sistema (le lettere nuove mancavano nel font originale)",
+              n=result.recreated) if result.recreated else ""
     print(f"{target}: {what}{extra}")
     if result.split:
-        print(f"- {result.split} occorrenze divise tra più pezzi di testo non sono state sostituite "
-              "(si cambiano una per una con edittext)")
+        print(t("- {split} occorrenze divise tra più pezzi di testo non sono state sostituite (si cambiano una per una con edittext)", split=result.split))
 
 
 def cmd_textobjects(args) -> int:
@@ -102,7 +102,7 @@ def cmd_textobjects(args) -> int:
         print(json.dumps([o.__dict__ for o in items], ensure_ascii=False, indent=1))
         return EXIT_OK
     if not items:
-        print(f"Nessun testo a pagina {args.page} (se è una scansione: wpdf ocr).")
+        print(t("Nessun testo a pagina {page} (se è una scansione: wpdf ocr).", page=args.page))
     for o in items:
         x0, y0, x1, y1 = o.bbox
         print(f"[{o.index}] ({x0:.0f},{y0:.0f})-({x1:.0f},{y1:.0f}) {o.font} {o.font_size:g}pt: {o.text}")
@@ -115,8 +115,8 @@ def cmd_replace(args) -> int:
     source, password, target = _prepare(args)
     pages = parse_pages(args.pages, _count(source, password)) if args.pages else None
     result = replace_text(source.data, target, args.find, args.replacement, pages, password)
-    word = "sostituzione" if result.changed == 1 else "sostituzioni"
-    _report(target, result, f"{result.changed} {word}")
+    done = t("1 sostituzione") if result.changed == 1 else t("{n} sostituzioni", n=result.changed)
+    _report(target, result, done)
     return EXIT_OK
 
 
@@ -128,7 +128,7 @@ def cmd_edittext(args) -> int:
     # Il testo resta com'è: un «\n» scritto (es. C:\new) non va trasformato.
     result = edit_object(source.data, target, args.page, args.text, at=at, index=args.index,
                          password=password)
-    _report(target, result, "testo eliminato" if result.notes else "testo modificato")
+    _report(target, result, t("testo eliminato") if result.notes else t("testo modificato"))
     return EXIT_OK
 
 
@@ -139,7 +139,7 @@ def cmd_movetext(args) -> int:
     to = _point(args.to, "--to") if args.to else None
     source, password, target = _prepare(args)
     move_object(source.data, target, args.page, args.index, by=by, to=to, password=password)
-    print(f"{target}: testo spostato a pagina {args.page}")
+    print(t("{target}: testo spostato a pagina {page}", target=target, page=args.page))
     return EXIT_OK
 
 
@@ -152,10 +152,10 @@ def cmd_objects(args) -> int:
         print(json.dumps([o.__dict__ for o in items], ensure_ascii=False, indent=1))
         return EXIT_OK
     if not items:
-        print(f"Nessun oggetto a pagina {args.page}.")
+        print(t("Nessun oggetto a pagina {page}.", page=args.page))
     for o in items:
         x0, y0, x1, y1 = o.bbox
-        print(f"{o.kind} {o.index}: ({x0:.0f},{y0:.0f})-({x1:.0f},{y1:.0f}) {KIND_NAMES[o.kind]}: {o.label}")
+        print(f"{o.kind} {o.index}: ({x0:.0f},{y0:.0f})-({x1:.0f},{y1:.0f}) {t(KIND_NAMES[o.kind])}: {o.label}")
     return EXIT_OK
 
 
@@ -166,7 +166,7 @@ def cmd_move(args) -> int:
     to = _point(args.to, "--to") if args.to else None
     source, password, target = _prepare(args)
     move_page_object(source.data, target, args.page, args.kind, args.index, by=by, to=to, password=password)
-    print(f"{target}: oggetto spostato ({KIND_NAMES[args.kind]}) a pagina {args.page}")
+    print(t("{target}: oggetto spostato ({v}) a pagina {page}", target=target, v=t(KIND_NAMES[args.kind]), page=args.page))
     return EXIT_OK
 
 
@@ -179,7 +179,7 @@ def cmd_addtext(args) -> int:
     lines = add_text(source.data, target, args.page, x, y, args.text.replace("\\n", "\n"), size=args.size,
                      color=color, bold=args.bold, password=password)
     what = "aggiunta 1 riga" if lines == 1 else f"aggiunte {lines} righe"
-    print(f"{target}: {what} di testo a pagina {args.page}")
+    print(t("{target}: {what} di testo a pagina {page}", target=target, what=what, page=args.page))
     return EXIT_OK
 
 

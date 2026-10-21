@@ -24,6 +24,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.x509 import load_der_x509_certificate
 
+from wmt_pdf.i18n import N_, t
+
 MAX_LAYERS = 5
 
 _HASHES = {
@@ -91,7 +93,7 @@ def open_p7m(data: bytes) -> P7mResult:
         signed_data = load_signed_data(current)
         content = signed_data["encap_content_info"]["content"].native
         if content is None:
-            raise P7mError("firma staccata: il contenuto firmato non è incluso nel file")
+            raise P7mError(t("firma staccata: il contenuto firmato non è incluso nel file"))
         result.layers.append([_safe_check(si, signed_data, content) for si in signed_data["signer_infos"]])
         current = content
         try:
@@ -101,7 +103,7 @@ def open_p7m(data: bytes) -> P7mResult:
             current = content
             break
     else:
-        raise P7mError(f"più di {MAX_LAYERS} livelli di firma annidati: file sospetto")
+        raise P7mError(t("più di {MAX_LAYERS} livelli di firma annidati: file sospetto", MAX_LAYERS=MAX_LAYERS))
     result.content = current
     return result
 
@@ -112,13 +114,13 @@ def guess_kind(content: bytes) -> str:
         return "pdf"
     if head.startswith(b"<"):
         if b"FatturaElettronica" in content[:4096]:
-            return "xml (fattura elettronica)"
+            return N_("xml (fattura elettronica)")
         return "xml"
     if head.startswith(b"PK"):
         return "zip/office"
     if content[:4] in (b"\x89PNG", b"\xff\xd8\xff\xe0", b"\xff\xd8\xff\xe1"):
-        return "immagine"
-    return "sconosciuto"
+        return N_("immagine")
+    return N_("sconosciuto")
 
 
 def decode_p7m(data: bytes) -> bytes:
@@ -128,26 +130,26 @@ def decode_p7m(data: bytes) -> bytes:
     try:
         decoded = base64.b64decode(re.sub(rb"\s+", b"", text), validate=True)
     except (binascii.Error, ValueError):
-        raise P7mError("non è un file p7m (né DER né base64)") from None
+        raise P7mError(t("non è un file p7m (né DER né base64)")) from None
     if decoded[:1] != b"\x30":
-        raise P7mError("non è un file p7m")
+        raise P7mError(t("non è un file p7m"))
     return decoded
 
 
 def load_signed_data(data: bytes) -> cms.SignedData:
     if data[:1] != b"\x30":
-        raise P7mError("non è un file p7m")
+        raise P7mError(t("non è un file p7m"))
     try:
         info = cms.ContentInfo.load(data)
         if info["content_type"].native != "signed_data":
-            raise P7mError("il file CMS non contiene una firma")
+            raise P7mError(t("il file CMS non contiene una firma"))
         signed_data = info["content"]
         _ = signed_data["signer_infos"].native  # forza il parsing completo
         return signed_data
     except P7mError:
         raise
     except Exception as exc:  # noqa: BLE001 - asn1crypto solleva tipi diversi
-        raise P7mError(f"struttura p7m non leggibile: {exc}") from None
+        raise P7mError(t("struttura p7m non leggibile: {exc}", exc=exc)) from None
 
 
 def _find_cert(signer_info: cms.SignerInfo, signed_data: cms.SignedData) -> x509.Certificate | None:
@@ -172,14 +174,14 @@ def _safe_check(signer_info: cms.SignerInfo, signed_data: cms.SignedData, conten
     try:
         return _check_signer(signer_info, signed_data, content)
     except Exception as exc:  # noqa: BLE001 - mai un crash su un file malformato
-        return Signer(problem=f"firmatario non verificabile: {exc}")
+        return Signer(problem=t("firmatario non verificabile: {exc}", exc=exc))
 
 
 def _check_signer(signer_info: cms.SignerInfo, signed_data: cms.SignedData, content: bytes) -> Signer:
     algo = signer_info["digest_algorithm"]["algorithm"].native
     cert = _find_cert(signer_info, signed_data)
     if cert is None:
-        return Signer(digest_algorithm=algo, problem="certificato del firmatario non incluso nel p7m")
+        return Signer(digest_algorithm=algo, problem=t("certificato del firmatario non incluso nel p7m"))
 
     subject = cert.subject.native
     issuer = cert.issuer.native
@@ -199,7 +201,7 @@ def _check_signer(signer_info: cms.SignerInfo, signed_data: cms.SignedData, cont
         cert_valid_at_signing=None,
     )
     if algo not in _HASHES:
-        signer.problem = f"algoritmo di impronta non supportato: {algo}"
+        signer.problem = t("algoritmo di impronta non supportato: {algo}", algo=algo)
         return signer
 
     signed_attrs = signer_info["signed_attrs"]
@@ -219,22 +221,22 @@ def _check_signer(signer_info: cms.SignerInfo, signed_data: cms.SignedData, cont
         _verify(cert, signer_info, to_verify, algo)
         signer.signature_valid = True
     except InvalidSignature:
-        signer.problem = "la firma non corrisponde al certificato"
+        signer.problem = t("la firma non corrisponde al certificato")
     except ValueError as exc:
         signer.problem = str(exc)
     if not signer.content_intact:
-        signer.problem = "il contenuto è stato modificato dopo la firma"
+        signer.problem = t("il contenuto è stato modificato dopo la firma")
     if signed_attrs and "content_type" in attrs:
         declared = attrs["content_type"].native
         encapsulated = signed_data["encap_content_info"]["content_type"].native
         if declared != encapsulated:
             signer.content_intact = False
-            signer.problem = "tipo di contenuto firmato diverso da quello incluso"
+            signer.problem = t("tipo di contenuto firmato diverso da quello incluso")
 
     if signer.signing_time and signer.not_before and signer.not_after:
         signer.cert_valid_at_signing = signer.not_before <= signer.signing_time <= signer.not_after
         if not signer.cert_valid_at_signing and signer.problem is None:
-            signer.problem = "alla data di firma il certificato non era valido"
+            signer.problem = t("alla data di firma il certificato non era valido")
     return signer
 
 
@@ -249,7 +251,7 @@ def _verify(cert: x509.Certificate, signer_info: cms.SignerInfo, data: bytes, al
             params = sig_algo["parameters"]
             pss_name = params["hash_algorithm"]["algorithm"].native
             if pss_name not in _HASHES:
-                raise ValueError(f"algoritmo PSS non supportato: {pss_name}")
+                raise ValueError(t("algoritmo PSS non supportato: {pss_name}", pss_name=pss_name))
             pss_hash = _HASHES[pss_name]
             pad = padding.PSS(mgf=padding.MGF1(pss_hash()), salt_length=params["salt_length"].native)
             public_key.verify(signature, data, pad, pss_hash())
@@ -258,7 +260,7 @@ def _verify(cert: x509.Certificate, signer_info: cms.SignerInfo, data: bytes, al
     elif isinstance(public_key, ec.EllipticCurvePublicKey):
         public_key.verify(signature, data, ec.ECDSA(hash_cls()))
     else:
-        raise ValueError(f"tipo di chiave non supportato: {type(public_key).__name__}")  # noqa: TRY004 - esito, non errore di tipo
+        raise ValueError(t("tipo di chiave non supportato: {name}", name=type(public_key).__name__))  # noqa: TRY004 - esito, non errore di tipo
 
 
 def fiscal_code(serial: str | None) -> str | None:

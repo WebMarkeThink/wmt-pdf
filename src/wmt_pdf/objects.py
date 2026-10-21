@@ -19,6 +19,7 @@ from pathlib import Path
 import pikepdf
 from pypdfium2 import raw
 
+from wmt_pdf.i18n import N_, t
 from wmt_pdf.source import CliError
 from wmt_pdf.textedit import (
     _bounds,
@@ -34,7 +35,7 @@ from wmt_pdf.textedit import (
 )
 
 KINDS = ("text", "image", "graphic", "annotation")
-KIND_NAMES = {"text": "testo", "image": "immagine", "graphic": "elemento grafico", "annotation": "annotazione"}
+KIND_NAMES = {"text": N_("testo"), "image": N_("immagine"), "graphic": N_("elemento grafico"), "annotation": N_("annotazione")}
 
 # Istruzioni che cambiano come si disegna un'immagine o un XObject: si riportano sull'oggetto spostato.
 FILL_COLOR, STROKE_COLOR = {"rg", "g", "k"}, {"RG", "G", "K"}
@@ -177,8 +178,8 @@ def _annot_label(annot: pikepdf.Dictionary) -> str:
         while field is not None and name is None:
             name = field.get("/T")
             field = field.get("/Parent")
-        return f"Campo «{name}»" if name is not None else "Campo modulo"
-    return ANNOT_NAMES.get(kind, kind)
+        return t("Campo «{name}»", name=name) if name is not None else t("Campo modulo")
+    return t(ANNOT_NAMES.get(kind, kind))
 
 
 def _rect(annot: pikepdf.Dictionary) -> list[float]:
@@ -199,9 +200,9 @@ def list_page_objects(data: bytes, page_no: int, password: str | None = None) ->
         matched = [d.kind for d in draws] == [d.kind for d in drawn]
         counts = {"image": 0, "graphic": 0}
         for k, item in enumerate(drawn):
-            label = "Immagine" if item.kind == "image" else "Elemento grafico"
+            label = t("Immagine") if item.kind == "image" else t("Elemento grafico")
             if matched and draws[k].name and _xobject_is_watermark(xobjects[draws[k].name]):
-                label = "Filigrana"
+                label = t("Filigrana")
             items.append(PageObject(item.kind, counts[item.kind], item.bbox, label))
             counts[item.kind] += 1
         items += [PageObject("annotation", i, _rect(a), _annot_label(a)) for i, a in _visible_annots(page)]
@@ -215,7 +216,7 @@ def _delta(bbox: list[float], by: tuple[float, float] | None, to: tuple[float, f
     if to is not None:
         return to[0] - bbox[0], to[1] - bbox[1]
     if by is None:
-        raise CliError("serve --by dx,dy oppure --to x,y")
+        raise CliError(t("serve --by dx,dy oppure --to x,y"))
     return by
 
 
@@ -224,12 +225,12 @@ def move_page_object(data: bytes, target: Path, page_no: int, kind: str, index: 
                      password: str | None = None) -> None:
     """Sposta un oggetto della pagina; con --to, l'angolo in basso a sinistra va nel punto indicato."""
     if kind not in KINDS:
-        raise CliError(f"tipo di oggetto sconosciuto: {kind} (uno tra {', '.join(KINDS)})")
+        raise CliError(t("tipo di oggetto sconosciuto: {kind} (uno tra {join})", kind=kind, join=', '.join(KINDS)))
     _refuse_signed(data)
     if kind == "text":
         texts = {o.index: o for o in list_objects(data, page_no, password)}
         if index not in texts:
-            raise CliError("pezzo di testo inesistente: vedi `wpdf objects`")
+            raise CliError(t("pezzo di testo inesistente: vedi `wpdf objects`"))
         move_object(data, target, page_no, index, by=_delta(texts[index].bbox, by, to), password=password)
     elif kind == "annotation":
         _move_annotation(data, target, page_no, index, by, to, password)
@@ -244,7 +245,7 @@ def _move_drawn(data: bytes, target: Path, page_no: int, kind: str, index: int, 
     drawn = _read_drawn(data, page_no, password)
     same_kind = [k for k, d in enumerate(drawn) if d.kind == kind]
     if not 0 <= index < len(same_kind):
-        raise CliError(f"{KIND_NAMES[kind]} inesistente: vedi `wpdf objects`")
+        raise CliError(t("{v} inesistente: vedi `wpdf objects`", v=t(KIND_NAMES[kind])))
     position = same_kind[index]
     item = drawn[position]
     dx, dy = _delta(item.bbox, by, to)
@@ -253,11 +254,11 @@ def _move_drawn(data: bytes, target: Path, page_no: int, kind: str, index: int, 
         instructions = list(pikepdf.parse_content_stream(page))
         draws = _draw_ops(instructions, page.obj.get("/Resources", {}).get("/XObject"))
         if [d.kind for d in draws] != [d.kind for d in drawn]:
-            raise CliError("struttura di questa pagina non gestita: nessuna modifica fatta")
+            raise CliError(t("struttura di questa pagina non gestita: nessuna modifica fatta"))
         draw = draws[position]
         problem = _unsupported(draw, page.obj.get("/Resources", {}))
         if problem:
-            raise CliError(f"questo oggetto usa {problem}: spostandolo cambierebbe aspetto, nessuna modifica fatta")
+            raise CliError(t("questo oggetto usa {problem}: spostandolo cambierebbe aspetto, nessuna modifica fatta", problem=problem))
         original = instructions[draw.position]
         rebuilt = [ins for i, ins in enumerate(instructions) if i != draw.position]
         op = pikepdf.Operator
@@ -279,16 +280,16 @@ def _unsupported(draw: _Draw, resources) -> str | None:
     """Stati grafici che dipendono dalla posizione sulla pagina e che, riportati così come sono, non seguirebbero
     l'oggetto: maschere morbide, motivi (pattern), ritagli pari-dispari."""
     if draw.even_odd:
-        return "un ritaglio pari-dispari"
+        return t("un ritaglio pari-dispari")
     states = resources.get("/ExtGState", {})
     for ins in draw.state:
         op = str(ins.operator)
         if op == "gs" and ins.operands:
             gs = states.get(str(ins.operands[0]))
             if gs is not None and gs.get("/SMask", pikepdf.Name("/None")) != pikepdf.Name("/None"):
-                return "una maschera di trasparenza"
+                return t("una maschera di trasparenza")
         elif op in ("scn", "SCN") and ins.operands and isinstance(ins.operands[-1], pikepdf.Name):  # /Pattern cs
-            return "un motivo (pattern)"
+            return t("un motivo (pattern)")
     return None
 
 
@@ -302,7 +303,7 @@ def _check_drawn(result: bytes, page_no: int, password: str | None, before: list
     ok = len(after) == len(expected) and [d.kind for d in after] == kinds and all(
         abs(u - v) < 1.0 for got, want in zip(after, expected, strict=True) for u, v in zip(got.bbox, want, strict=True))
     if not ok:
-        raise CliError("lo spostamento non ha dato il risultato atteso: file non scritto (PDF con una struttura particolare)")
+        raise CliError(t("lo spostamento non ha dato il risultato atteso: file non scritto (PDF con una struttura particolare)"))
 
 
 def _shift(values, dx: float, dy: float) -> pikepdf.Array:
@@ -314,11 +315,11 @@ def _move_annotation(data: bytes, target: Path, page_no: int, index: int, by, to
 
     with open_pdf(data, password) as pdf:
         if not 1 <= page_no <= len(pdf.pages):
-            raise CliError(f"pagina {page_no} fuori dal documento (1-{len(pdf.pages)})")
+            raise CliError(t("pagina {page_no} fuori dal documento (1-{len})", page_no=page_no, len=len(pdf.pages)))
         page = pdf.pages[page_no - 1]
         annots = dict(_visible_annots(page))
         if index not in annots:
-            raise CliError("annotazione inesistente: vedi `wpdf objects`")
+            raise CliError(t("annotazione inesistente: vedi `wpdf objects`"))
         annot = annots[index]
         dx, dy = _delta(_rect(annot), by, to)
         # L'aspetto (/AP) si adatta al rettangolo da solo: bastano il rettangolo e i punti che lo descrivono.

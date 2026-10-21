@@ -26,23 +26,24 @@ from wmt_pdf.cades import (
     join_names,
     load_signed_data,
 )
+from wmt_pdf.i18n import N_, t
 from wmt_pdf.source import CliError
 
-VALID, INVALID, INDETERMINATE = "VALIDA", "NON VALIDA", "NON VERIFICABILE"
+VALID, INVALID, INDETERMINATE = N_("VALIDA"), N_("NON VALIDA"), N_("NON VERIFICABILE")
 
 PROBLEMS = {
-    "REVOKED": "certificato revocato",
-    "EXPIRED": "certificato scaduto alla data di verifica",
-    "NOT_YET_VALID": "certificato non ancora valido",
-    "NO_CERTIFICATE_CHAIN_FOUND": "certificatore non riconosciuto",
-    "CHAIN_CONSTRAINTS_FAILURE": "catena di certificati non conforme",
-    "CRYPTO_CONSTRAINTS_FAILURE": "algoritmi non più ammessi",
-    "TRY_LATER": "informazioni di revoca non disponibili ora",
-    "REVOCATION_OUT_OF_BOUNDS_NO_POE": "informazioni di revoca non disponibili",
-    "OUT_OF_BOUNDS_NO_POE": "certificato non valido alla data della firma",
-    "NO_POE": "manca la prova dell'esistenza alla data della firma",
-    "SIG_CONSTRAINTS_FAILURE": "uso del certificato non ammesso per la firma",
-    "GENERIC": "problema di validazione",
+    "REVOKED": N_("certificato revocato"),
+    "EXPIRED": N_("certificato scaduto alla data di verifica"),
+    "NOT_YET_VALID": N_("certificato non ancora valido"),
+    "NO_CERTIFICATE_CHAIN_FOUND": N_("certificatore non riconosciuto"),
+    "CHAIN_CONSTRAINTS_FAILURE": N_("catena di certificati non conforme"),
+    "CRYPTO_CONSTRAINTS_FAILURE": N_("algoritmi non più ammessi"),
+    "TRY_LATER": N_("informazioni di revoca non disponibili ora"),
+    "REVOCATION_OUT_OF_BOUNDS_NO_POE": N_("informazioni di revoca non disponibili"),
+    "OUT_OF_BOUNDS_NO_POE": N_("certificato non valido alla data della firma"),
+    "NO_POE": N_("manca la prova dell'esistenza alla data della firma"),
+    "SIG_CONSTRAINTS_FAILURE": N_("uso del certificato non ammesso per la firma"),
+    "GENERIC": N_("problema di validazione"),
 }
 
 
@@ -68,6 +69,7 @@ class Report:
     bottom_line: bool | None = None  # giudizio complessivo di pyHanko, come controllo in più
     error: str | None = None  # errore interno: la firma non è stata giudicata
     problems: list[str] = field(default_factory=list)
+    label_values: dict = field(default_factory=dict)  # valori dei segnaposto di label (si traduce quando si mostra)
 
     @property
     def verdict(self) -> str:
@@ -157,20 +159,20 @@ def _fill_common(report: Report, status, manager, registry, offline: bool) -> No
     if report.trusted and path is not None:
         anchor_cert = getattr(path.trust_anchor.authority, "certificate", None)
         if anchor_cert is not None and anchor_cert.dump() in manager.custom_roots:
-            report.trust_source = "radice indicata con --trust-root"
+            report.trust_source = N_("radice indicata con --trust-root")
         else:
-            report.trust_source = "elenco europeo dei certificatori fidati"
+            report.trust_source = N_("elenco europeo dei certificatori fidati")
             report.qualification = _qualification(path, registry, report)
     if offline:
-        report.revocation = "non verificata (modalità offline)"
+        report.revocation = N_("non verificata (modalità offline)")
     elif not report.trusted:
-        report.revocation = "non verificata (certificatore non riconosciuto)"
+        report.revocation = N_("non verificata (certificatore non riconosciuto)")
     elif _has_revocation_pointers(cert):
-        report.revocation = "verificata online (OCSP/CRL)"
+        report.revocation = N_("verificata online (OCSP/CRL)")
         report.revocation_checked = True
     else:
         # Nessun servizio di revoca indicato: non c'è nulla da controllare, e lo si dice.
-        report.revocation = "il certificato non indica servizi di revoca"
+        report.revocation = N_("il certificato non indica servizi di revoca")
         report.revocation_checked = True
     ts = getattr(status, "timestamp_validity", None)
     if ts is not None:
@@ -178,7 +180,7 @@ def _fill_common(report: Report, status, manager, registry, offline: bool) -> No
         # Una marca vale come data certa solo se emessa da un servizio fidato.
         report.timestamp_ok = bool(ts.intact and ts.valid and ts.trusted)
         if not report.timestamp_ok:
-            report.problems.append("marca temporale non attendibile")
+            report.problems.append(t("marca temporale non attendibile"))
 
 
 def _qualification(path, registry, report: Report) -> str | None:
@@ -198,18 +200,18 @@ def _qualification(path, registry, report: Report) -> str | None:
         return None
     status = result.status
     if not status.qualified:
-        return "firma elettronica avanzata (certificato non qualificato)"
+        return N_("firma elettronica avanzata (certificato non qualificato)")
     secure = status.qc_key_security in (QcPrivateKeyManagementType.QSCD, QcPrivateKeyManagementType.QSCD_DELEGATED,
                                         QcPrivateKeyManagementType.QSCD_BY_POLICY)
     if status.qc_type == QcCertType.QC_ESEAL:
-        return "sigillo elettronico qualificato" if secure else "sigillo con certificato qualificato"
-    return "firma elettronica qualificata (QES)" if secure else "firma con certificato qualificato"
+        return N_("sigillo elettronico qualificato") if secure else N_("sigillo con certificato qualificato")
+    return N_("firma elettronica qualificata (QES)") if secure else N_("firma con certificato qualificato")
 
 
 def _error(report: Report, exc: Exception) -> None:
     text = str(exc).strip().splitlines()[0][:200] if str(exc).strip() else type(exc).__name__
     report.error = text
-    report.problems.append(f"verifica non completata: {text}")
+    report.problems.append(t("verifica non completata: {text}", text=text))
 
 
 # --- PDF -----------------------------------------------------------------------------------
@@ -226,22 +228,22 @@ def verify_pdf(data: bytes, roots, offline: bool) -> list[Report]:
         reader = PdfFileReader(io.BytesIO(data), strict=False)
         embedded = list(reader.embedded_signatures)
     except Exception as exc:  # noqa: BLE001
-        raise CliError(f"struttura del PDF non leggibile per le firme: {exc}") from None
+        raise CliError(t("struttura del PDF non leggibile per le firme: {exc}", exc=exc)) from None
     verifier = Verifier(roots, offline)
     reports = []
     for sig in embedded:
         report = Report(kind="PAdES" if "ETSI" in str(sig.sig_object.get("/SubFilter", "")) else "PDF",
-                        label=f"campo {sig.field_name}")
+                        label="campo {field}", label_values={"field": sig.field_name})
         certs = [c.chosen for c in (sig.signed_data["certificates"] or []) if c.name == "certificate"]
         context, manager, registry = verifier.context(certs)  # errori dell'elenco: CliError, non un esito
         try:
             status = validate_pdf_signature(sig, signer_validation_context=context, ts_validation_context=context)
             _fill_common(report, status, manager, registry, offline)
             if status.coverage is not None:
-                report.coverage = COVERAGE.get(status.coverage.name, "solo una parte del file")
+                report.coverage = COVERAGE.get(status.coverage.name, N_("solo una parte del file"))
             level = status.modification_level.name if status.modification_level is not None else None
             if status.docmdp_ok is False or level == "OTHER":
-                report.modified_after = MODIFICATION.get(level or "OTHER", "modifiche dopo la firma")
+                report.modified_after = MODIFICATION.get(level or "OTHER", N_("modifiche dopo la firma"))
         except Exception as exc:  # noqa: BLE001 - un errore interno rende la firma non verificabile, non non valida
             _error(report, exc)
         reports.append(report)
@@ -274,18 +276,19 @@ def verify_p7m(data: bytes, roots, offline: bool) -> list[Report]:
                 raise CliError(str(exc)) from None
             break
         if depth > MAX_LAYERS:
-            raise CliError(f"più di {MAX_LAYERS} livelli di firma annidati: file sospetto")
+            raise CliError(t("più di {MAX_LAYERS} livelli di firma annidati: file sospetto", MAX_LAYERS=MAX_LAYERS))
         content = signed["encap_content_info"]["content"].native
         if content is None:
-            raise CliError("firma staccata: il contenuto firmato non è nel file")
+            raise CliError(t("firma staccata: il contenuto firmato non è nel file"))
         certs = [c.chosen for c in (signed["certificates"] or []) if c.name == "certificate"]
         context, manager, registry = verifier.context(certs)
         infos = list(signed["signer_infos"])
         if not infos:
-            reports.append(Report(kind="CAdES", label=f"livello {depth}", problems=["nessun firmatario"]))
+            reports.append(Report(kind="CAdES", label=N_("livello {depth}"), label_values={"depth": depth},
+                                  problems=[N_("nessun firmatario")]))
         for k, info in enumerate(infos, start=1):
-            label = f"livello {depth}" + (f", firmatario {k}" if len(infos) > 1 else "")
-            report = Report(kind="CAdES", label=label)
+            label = N_("livello {depth}, firmatario {k}") if len(infos) > 1 else N_("livello {depth}")
+            report = Report(kind="CAdES", label=label, label_values={"depth": depth, "k": k})
             single = signed.copy()
             single["signer_infos"] = cms.SignerInfos([info])  # pyhanko verifica un firmatario per volta
             # Busta senza contenuto + contenuto a parte: così pyhanko valuta anche la marca temporale.

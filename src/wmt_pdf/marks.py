@@ -10,6 +10,7 @@ from pathlib import Path
 import pikepdf
 import pypdfium2 as pdfium
 
+from wmt_pdf.i18n import N_, t
 from wmt_pdf.ops import open_pdf, save
 from wmt_pdf.source import CliError
 
@@ -23,10 +24,10 @@ COLORS = {
 }
 
 ANNOT_NAMES = {
-    "Highlight": "Evidenziazione", "Underline": "Sottolineatura", "StrikeOut": "Barrato", "Squiggly": "Ondulata",
-    "Text": "Nota", "FreeText": "Testo", "Square": "Rettangolo", "Circle": "Cerchio", "Ink": "Disegno",
-    "Stamp": "Timbro", "Line": "Linea", "Polygon": "Poligono", "FileAttachment": "Allegato", "Watermark": "Filigrana",
-    "Link": "Collegamento", "Widget": "Campo modulo", "Popup": "Popup",
+    "Highlight": N_("Evidenziazione"), "Underline": N_("Sottolineatura"), "StrikeOut": N_("Barrato"), "Squiggly": N_("Ondulata"),
+    "Text": N_("Nota"), "FreeText": N_("Testo"), "Square": N_("Rettangolo"), "Circle": N_("Cerchio"), "Ink": N_("Disegno"),
+    "Stamp": N_("Timbro"), "Line": N_("Linea"), "Polygon": N_("Poligono"), "FileAttachment": N_("Allegato"), "Watermark": N_("Filigrana"),
+    "Link": N_("Collegamento"), "Widget": N_("Campo modulo"), "Popup": N_("Popup"),
 }
 
 
@@ -72,9 +73,9 @@ def add_watermark(data: bytes, target: Path, *, text: str | None = None, image: 
                   opacity: float = 0.15, angle: float = 45, size: float | None = None,
                   color: str = "grigio", numbers: list[int] | None = None, password: str | None = None) -> int:
     if not text and not image:
-        raise CliError("indica --text oppure --image")
+        raise CliError(t("indica --text oppure --image"))
     if not 0 < opacity <= 1:
-        raise CliError("--opacity tra 0 e 1")
+        raise CliError(t("--opacity tra 0 e 1"))
     rgb = (0.45, 0.45, 0.45) if color == "grigio" else COLORS.get(color, (0.45, 0.45, 0.45))
     cache: dict[tuple[float, float], pikepdf.Pdf] = {}
     with open_pdf(data, password) as pdf:
@@ -253,7 +254,7 @@ def add_highlights(data: bytes, target: Path, query: str, *, color: str = "giall
                    author: str = "wmt-pdf", numbers: list[int] | None = None, password: str | None = None) -> int:
     rgb = COLORS.get(color)
     if rgb is None:
-        raise CliError(f"colore sconosciuto: {color} (scegli tra {', '.join(sorted(COLORS))})")
+        raise CliError(t("colore sconosciuto: {color} (scegli tra {join})", color=color, join=', '.join(sorted(COLORS))))
     hits = find_rects(data, query, password, numbers)
     total = sum(len(v) for v in hits.values())
     if not total:
@@ -333,7 +334,7 @@ def list_annotations(data: bytes, include_all: bool = False, password: str | Non
                             textpage = doc[n - 1].get_textpage()
                         text = _text_under(textpage, [float(v) for v in a.QuadPoints])
                     result.append(Annotation(
-                        page=n, type=kind, label=ANNOT_NAMES.get(kind, kind),
+                        page=n, type=kind, label=t(ANNOT_NAMES.get(kind, kind)),
                         author=_s(a.get("/T")), contents=_s(a.get("/Contents")), text=text, modified=_s(a.get("/M")),
                     ))
                 if textpage is not None:

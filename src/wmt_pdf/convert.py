@@ -16,6 +16,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError, load_source
 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
@@ -40,7 +41,7 @@ def kind_of(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED:
         formats = ", ".join(sorted({s.lstrip(".") for s in SUPPORTED}))
-        raise CliError(f"formato non supportato: {path.name} (supportati: {formats})")
+        raise CliError(t("formato non supportato: {name} (supportati: {formats})", name=path.name, formats=formats))
     return suffix
 
 
@@ -82,7 +83,7 @@ def to_pdf(path: Path, *, attachments: bool = False, local_files: bool = True) -
         return Converted(html_to_pdf(csv_to_html(_decode_text(raw)), base, landscape=True))
     if suffix == ".eml":
         return eml_to_pdf(raw, attachments=attachments)
-    raise CliError(f"formato non supportato: {path.name}")  # pragma: no cover
+    raise CliError(t("formato non supportato: {name}", name=path.name))  # pragma: no cover
 
 
 def _check_zip(raw: bytes, name: str) -> None:
@@ -92,9 +93,9 @@ def _check_zip(raw: bytes, name: str) -> None:
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             total = sum(info.file_size for info in archive.infolist())
     except zipfile.BadZipFile:
-        raise CliError(f"{name} non è un documento Office valido (archivio rovinato)") from None
+        raise CliError(t("{name} non è un documento Office valido (archivio rovinato)", name=name)) from None
     if total > MAX_UNZIPPED_BYTES:
-        raise CliError(f"{name}: contenuto decompresso di {total // 1024 // 1024} MB, oltre il limite di sicurezza")
+        raise CliError(t("{name}: contenuto decompresso di {v} MB, oltre il limite di sicurezza", name=name, v=total // 1024 // 1024))
 
 
 def _require_convert_extra(suffix: str) -> None:
@@ -105,7 +106,7 @@ def _require_convert_extra(suffix: str) -> None:
     if suffix in IMAGE_EXT:
         return
     if importlib.util.find_spec(module) is None or importlib.util.find_spec("xhtml2pdf") is None:
-        raise CliError("conversione non installata: `uv sync --extra convert` (oppure pip install 'wmt-pdf[convert]')")
+        raise CliError(t("conversione non installata: `uv sync --extra convert` (oppure pip install 'wmt-pdf[convert]')"))
 
 
 def _decode_text(raw: bytes) -> str:
@@ -231,7 +232,7 @@ def html_to_pdf(html: str, base_dir: Path | None, landscape: bool = False) -> by
     out = io.BytesIO()
     status = pisa.CreatePDF(html, dest=out, encoding="utf-8", link_callback=link_callback, resource_policy=policy)
     if status.err:
-        raise CliError(f"conversione HTML non riuscita ({status.err} errori)")
+        raise CliError(t("conversione HTML non riuscita ({err} errori)", err=status.err))
     return out.getvalue()
 
 
@@ -355,7 +356,7 @@ def xlsx_to_html(raw: bytes) -> str:
         cells = (ws.max_row or 0) * (ws.max_column or 0)
         if cells > MAX_SHEET_CELLS:
             wb.close()
-            raise CliError(f"foglio «{ws.title}» troppo grande ({ws.max_row} righe × {ws.max_column} colonne)")
+            raise CliError(t("foglio «{title}» troppo grande ({max_row} righe × {max_column} colonne)", title=ws.title, max_row=ws.max_row, max_column=ws.max_column))
         rows = [[_xlsx_value(v) for v in row] for row in ws.iter_rows(values_only=True)]
         rows = [r for r in rows if any(c != "" for c in r)]
         if not rows:
@@ -573,7 +574,7 @@ def _append_attachments(base: Converted, files: list[tuple[str, bytes]]) -> Conv
                 # Un allegato non è fidato: niente letture di file locali.
                 parts.append(Part(Path(clean).stem or "allegato", to_pdf(target, local_files=False).data))
             except CliError as exc:
-                base.notes.append(f"allegato {name} non accodato: {exc}")
+                base.notes.append(t("allegato {name} non accodato: {exc}", name=name, exc=exc))
         out = Path(tmp) / "unito.pdf"
         merge(parts, out)
         return Converted(out.read_bytes(), base.notes)

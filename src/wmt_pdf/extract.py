@@ -13,6 +13,8 @@ from typing import Any
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
 
+from wmt_pdf.i18n import t
+
 # Fascia in alto e in basso dove cercare intestazioni e piè di pagina ripetuti.
 MARGIN_BAND = 0.08
 # Una pagina con meno caratteri di così e almeno un'immagine è trattata come scansione.
@@ -260,8 +262,7 @@ class Extractor:
                 self._apply_ocr(item, lang, required=ocr == "force")
             elif item.scanned:
                 item.note = (
-                    f"pagina senza testo, con {st.images} immagini: probabilmente una scansione. "
-                    f"Usa --ocr force oppure `wpdf render --page {n}`"
+                    t("pagina senza testo, con {images} immagini: probabilmente una scansione. Usa --ocr force oppure `wpdf render --page {n}`", images=st.images, n=n)
                 )
             result.append(item)
         return result, removed
@@ -270,12 +271,12 @@ class Extractor:
         from wmt_pdf import ocr
 
         if not ocr.available():
-            msg = "OCR non installato: `uv sync --extra ocr` (oppure pip install 'wmt-pdf[ocr]')"
+            msg = t("OCR non installato: `uv sync --extra ocr` (oppure pip install 'wmt-pdf[ocr]')")
             if required:
                 from wmt_pdf.source import CliError
 
                 raise CliError(msg)
-            item.note = f"pagina senza testo, con {item.images} immagini. {msg}"
+            item.note = t("pagina senza testo, con {images} immagini. {msg}", images=item.images, msg=msg)
             return
         page = self.doc[item.page - 1]
         try:

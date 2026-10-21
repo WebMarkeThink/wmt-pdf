@@ -12,6 +12,8 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from wmt_pdf.i18n import t
+
 PDF = [".pdf", ".p7m"]
 ANY = ["*"]
 _secret_ids = itertools.count(1)
@@ -220,10 +222,15 @@ def catalog() -> list[dict]:
     for tool in _TOOLS:
         item = asdict(tool)
         item.pop("command")
-        item["category_label"], item["color"] = CATEGORIES[tool.category]
+        category, item["color"] = CATEGORIES[tool.category]
+        item["category_label"] = t(category)
+        item["label"], item["description"] = t(tool.label), t(tool.description)
         for opt in item["options"]:
             opt.pop("flag")
             opt.pop("negate")
+            opt["label"] = t(opt["label"])
+            opt["help"] = t(opt["help"]) if opt["help"] else ""
+            opt["labels"] = [t(label) for label in opt["labels"]]
         result.append(item)
     return result
 
@@ -238,21 +245,21 @@ def _stem(path: Path) -> str:
 def _check(opt: Option, value):
     if opt.kind == "bool":
         if not isinstance(value, bool):
-            raise ValueError(f"{opt.label}: serve sì o no")
+            raise ValueError(t("{label}: serve sì o no", label=t(opt.label)))
         return value
     if opt.kind == "number":
         if isinstance(value, bool):
-            raise ValueError(f"{opt.label}: serve un numero")
+            raise ValueError(t("{label}: serve un numero", label=t(opt.label)))
         try:
             number = float(value)
         except (TypeError, ValueError):
-            raise ValueError(f"{opt.label}: serve un numero") from None
+            raise ValueError(t("{label}: serve un numero", label=t(opt.label))) from None
         return int(number) if number.is_integer() else number
     text = str(value)
     if opt.kind == "choice" and text not in opt.choices:
-        raise ValueError(f"{opt.label}: valore non previsto")
+        raise ValueError(t("{label}: valore non previsto", label=t(opt.label)))
     if len(text) > 2000 or "\x00" in text:
-        raise ValueError(f"{opt.label}: valore non valido")
+        raise ValueError(t("{label}: valore non valido", label=t(opt.label)))
     return text
 
 
@@ -278,9 +285,9 @@ def build_args(tool: Tool, inputs: list[Path], options: dict, outdir: Path) -> t
     known = {o.name: o for o in tool.options}
     unknown = [k for k in options if k not in known]
     if unknown:
-        raise ValueError(f"opzioni sconosciute: {', '.join(unknown)}")
+        raise ValueError(t("opzioni sconosciute: {join}", join=', '.join(unknown)))
     if not tool.min_files <= len(inputs) <= tool.max_files:
-        raise ValueError(f"{tool.label}: servono da {tool.min_files} a {tool.max_files} file")
+        raise ValueError(t("{label}: servono da {min_files} a {max_files} file", label=t(tool.label), min_files=tool.min_files, max_files=tool.max_files))
     flags: list[str] = []
     positionals: list[str] = []
     env: dict[str, str] = {}
@@ -289,7 +296,7 @@ def build_args(tool: Tool, inputs: list[Path], options: dict, outdir: Path) -> t
         value = options.get(opt.name, opt.default)
         if value is None or value == "":
             if opt.required:
-                raise ValueError(f"{opt.label}: obbligatorio")
+                raise ValueError(t("{label}: obbligatorio", label=t(opt.label)))
             continue
         value = _check(opt, value) if opt.kind != "file" else Path(value)
         values[opt.name] = value
@@ -306,7 +313,7 @@ def build_args(tool: Tool, inputs: list[Path], options: dict, outdir: Path) -> t
             flags.append(f"{opt.flag}={value}")  # forma --opzione=valore: un valore che inizia con "-" resta un valore
     if tool.one_of and not any(values.get(name) not in (None, "") for name in tool.one_of):
         labels = [known[n].label for n in tool.one_of]
-        raise ValueError(f"{tool.label}: indica {' oppure '.join(labels)}")
+        raise ValueError(t("{label}: indica {join}", label=t(tool.label), join=t(" oppure ").join(t(x) for x in labels)))
 
     first = inputs[0]
     stem = _stem(first)

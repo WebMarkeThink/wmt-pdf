@@ -26,6 +26,7 @@ import pikepdf
 import pypdfium2 as pdfium
 from pypdfium2 import raw
 
+from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError
 
 SHOW_OPS = {"Tj", "TJ", "'", '"'}
@@ -214,13 +215,13 @@ def _open(data: bytes, password: str | None) -> pdfium.PdfDocument:
         return pdfium.PdfDocument(data, password=password)
     except pdfium.PdfiumError as exc:
         if "password" in str(exc).lower():
-            raise CliError("PDF protetto da password: usa --password o --password-env") from None
-        raise CliError(f"PDF non leggibile: {exc}") from None
+            raise CliError(t("PDF protetto da password: usa --password o --password-env")) from None
+        raise CliError(t("PDF non leggibile: {exc}", exc=exc)) from None
 
 
 def _page(doc, page_no: int):
     if not 1 <= page_no <= len(doc):
-        raise CliError(f"pagina {page_no} fuori dal documento (1-{len(doc)})")
+        raise CliError(t("pagina {page_no} fuori dal documento (1-{len})", page_no=page_no, len=len(doc)))
     return doc[page_no - 1]
 
 
@@ -242,7 +243,7 @@ def _refuse_signed(data: bytes) -> None:
     from wmt_pdf.pades import count_signatures
 
     if count_signatures(data):
-        raise CliError("il PDF è firmato digitalmente: modificarne il testo renderebbe le firme non valide")
+        raise CliError(t("il PDF è firmato digitalmente: modificarne il testo renderebbe le firme non valide"))
 
 
 def _page_count(data: bytes, password: str | None) -> int:
@@ -538,7 +539,7 @@ def _apply(data: bytes, page_no: int, changes: list[_Change], password: str | No
             instructions = list(pikepdf.parse_content_stream(page))
             shows = _show_ops(instructions)
             if len(shows) != len(infos):
-                raise CliError("struttura del testo di questa pagina non gestita: nessuna modifica fatta")
+                raise CliError(t("struttura del testo di questa pagina non gestita: nessuna modifica fatta"))
             fonts = page.obj.get("/Resources", {}).get("/Font", {})
             replaced: dict[int, list] = {}
             for change in changes:
@@ -607,7 +608,7 @@ def _verify(data: bytes, page_no: int, password: str | None, expected: list[str]
     got = [_norm(i.text) for i in _read_page(data, page_no, password) if _norm(i.text)]
     want = [_norm(t) for t in expected if _norm(t)]
     if got != want:
-        raise CliError("la modifica non ha dato il testo atteso: file non scritto (PDF con una struttura particolare)")
+        raise CliError(t("la modifica non ha dato il testo atteso: file non scritto (PDF con una struttura particolare)"))
 
 
 def _write(data: bytes, target: Path) -> None:
@@ -621,7 +622,7 @@ def _write(data: bytes, target: Path) -> None:
 def replace_text(data: bytes, target: Path, find: str, replacement: str, pages: list[int] | None = None,
                  password: str | None = None) -> EditResult:
     if not find:
-        raise CliError("testo da cercare vuoto")
+        raise CliError(t("testo da cercare vuoto"))
     _refuse_signed(data)
     result = EditResult()
     current = data
@@ -635,9 +636,9 @@ def replace_text(data: bytes, target: Path, find: str, replacement: str, pages: 
             result.recreated += recreated
             result.changed += len(changes)
     if not result.changed:
-        hint = (" (c'è, ma diviso in più pezzi di testo o dentro un gruppo di oggetti: "
-                "modificalo un pezzo per volta con edittext)") if result.split else ""
-        raise CliError(f"«{find}» non trovato in un unico pezzo di testo{hint}")
+        hint = t(" (c'è, ma diviso in più pezzi di testo o dentro un gruppo di oggetti: "
+                 "modificalo un pezzo per volta con edittext)") if result.split else ""
+        raise CliError(t("«{find}» non trovato in un unico pezzo di testo{hint}", find=find, hint=hint))
     _write(current, target)
     return result
 
@@ -660,9 +661,9 @@ def edit_object(data: bytes, target: Path, page_no: int, new_text: str, *, at: t
     if at is not None:
         index = _object_at(infos, *at)
         if index is None:
-            raise CliError(f"nessun testo in quel punto di pagina {page_no}")
+            raise CliError(t("nessun testo in quel punto di pagina {page_no}", page_no=page_no))
     elif index is None or not 0 <= index < len(infos):
-        raise CliError("pezzo di testo inesistente: vedi `wpdf textobjects`")
+        raise CliError(t("pezzo di testo inesistente: vedi `wpdf textobjects`"))
     result, recreated = _apply(data, page_no, [_Change(index, new_text)], password)
     _write(result, target)
     if not new_text.strip():
@@ -682,7 +683,7 @@ def move_object(data: bytes, target: Path, page_no: int, index: int, *, by: tupl
     _refuse_signed(data)
     infos = _read_page(data, page_no, password)
     if not 0 <= index < len(infos):
-        raise CliError("pezzo di testo inesistente: vedi `wpdf textobjects`")
+        raise CliError(t("pezzo di testo inesistente: vedi `wpdf textobjects`"))
     info = infos[index]
     a, b, c, d, e, f = info.matrix
     dx, dy = (to[0] - e, to[1] - f) if to is not None else (by or (0.0, 0.0))
@@ -691,13 +692,13 @@ def move_object(data: bytes, target: Path, page_no: int, index: int, *, by: tupl
         instructions = list(pikepdf.parse_content_stream(page))
         shows = _show_ops(instructions)
         if len(shows) != len(infos):
-            raise CliError("struttura del testo di questa pagina non gestita: nessuna modifica fatta")
+            raise CliError(t("struttura del testo di questa pagina non gestita: nessuna modifica fatta"))
         show = shows[index]
         original = instructions[show.position]
         fonts = page.obj.get("/Resources", {}).get("/Font", {})
         font = fonts.get(show.font) if show.font else None
         if font is None:
-            raise CliError("font del testo non trovato tra le risorse della pagina: nessuna modifica fatta")
+            raise CliError(t("font del testo non trovato tra le risorse della pagina: nessuna modifica fatta"))
         replacement = _replacement(original, show, b"", _widths(font))
         rebuilt = []
         for i, ins in enumerate(instructions):
@@ -732,7 +733,7 @@ def move_object(data: bytes, target: Path, page_no: int, index: int, *, by: tupl
 def parse_color(text: str) -> tuple[int, int, int]:
     match = re.fullmatch(r"#?([0-9a-fA-F]{6})", text.strip())
     if not match:
-        raise CliError("--color vuole un colore esadecimale, es. #c00000")
+        raise CliError(t("--color vuole un colore esadecimale, es. #c00000"))
     value = match.group(1)
     return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
 
@@ -741,12 +742,12 @@ def add_text(data: bytes, target: Path, page_no: int, x: float, y: float, text: 
              color: tuple[int, int, int] = (0, 0, 0), bold: bool = False, password: str | None = None) -> int:
     """Testo nuovo con origine (x, y) della prima riga, in punti dal basso a sinistra; una riga per «\\n»."""
     if not text.strip():
-        raise CliError("testo vuoto")
+        raise CliError(t("testo vuoto"))
     if not 1 <= size <= 400:
-        raise CliError("--size tra 1 e 400")
+        raise CliError(t("--size tra 1 e 400"))
     _refuse_signed(data)
     if not 1 <= page_no <= _page_count(data, password):
-        raise CliError(f"pagina {page_no} fuori dal documento")
+        raise CliError(t("pagina {page_no} fuori dal documento", page_no=page_no))
     additions = []
     for k, line in enumerate(text.split("\n")):
         if line:

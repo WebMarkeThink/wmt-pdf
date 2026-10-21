@@ -11,18 +11,19 @@ import logging
 from dataclasses import dataclass
 
 from wmt_pdf.cades import fiscal_code, join_names
+from wmt_pdf.i18n import N_, t
 
 COVERAGE = {
-    "ENTIRE_FILE": "tutto il file",
-    "ENTIRE_REVISION": "la sua revisione; il file è stato poi esteso",
-    "CONTENT_ONLY": "solo il contenuto",
+    "ENTIRE_FILE": N_("tutto il file"),
+    "ENTIRE_REVISION": N_("la sua revisione; il file è stato poi esteso"),
+    "CONTENT_ONLY": N_("solo il contenuto"),
 }
 MODIFICATION = {
-    "NONE": "nessuna modifica dopo la firma",
-    "LTA_UPDATES": "solo aggiunte di validazione a lungo termine",
-    "FORM_FILLING": "compilazione di moduli dopo la firma",
-    "ANNOTATIONS": "annotazioni aggiunte dopo la firma",
-    "OTHER": "modifiche sostanziali dopo la firma",
+    "NONE": N_("nessuna modifica dopo la firma"),
+    "LTA_UPDATES": N_("solo aggiunte di validazione a lungo termine"),
+    "FORM_FILLING": N_("compilazione di moduli dopo la firma"),
+    "ANNOTATIONS": N_("annotazioni aggiunte dopo la firma"),
+    "OTHER": N_("modifiche sostanziali dopo la firma"),
 }
 
 
@@ -79,7 +80,7 @@ def check_signatures(data: bytes) -> list[PdfSignature]:
         reader = PdfFileReader(io.BytesIO(data), strict=False)
         embedded = list(reader.embedded_signatures)
     except Exception as exc:  # noqa: BLE001
-        raise ValueError(f"struttura del PDF non leggibile per le firme: {exc}") from None
+        raise ValueError(t("struttura del PDF non leggibile per le firme: {exc}", exc=exc)) from None
     result = []
     for sig in embedded:
         item = PdfSignature(

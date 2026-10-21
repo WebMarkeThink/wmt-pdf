@@ -21,12 +21,13 @@ from pikepdf.form import (
 )
 
 from wmt_pdf.appearance import refresh_text_appearances, widgets_of
+from wmt_pdf.i18n import N_, t
 from wmt_pdf.ops import open_pdf, save
 from wmt_pdf.source import CliError
 
 TYPE_LABELS = {
-    "text": "testo", "checkbox": "casella", "radio": "scelta singola", "choice": "elenco",
-    "signature": "firma", "button": "pulsante", "other": "altro",
+    "text": N_("testo"), "checkbox": N_("casella"), "radio": N_("scelta singola"), "choice": N_("elenco"),
+    "signature": N_("firma"), "button": N_("pulsante"), "other": N_("altro"),
 }
 TRUE_WORDS = {"1", "true", "sì", "si", "s", "yes", "y", "x", "on", "vero", "ok"}
 FALSE_WORDS = {"0", "false", "no", "n", "", "off", "falso"}
@@ -47,7 +48,7 @@ class FieldInfo:
 
     @property
     def label(self) -> str:
-        return TYPE_LABELS.get(self.type, self.type)
+        return t(TYPE_LABELS.get(self.type, self.type))
 
 
 def _kind(f) -> str:
@@ -96,7 +97,7 @@ def _value(f):
         v = f.value
         return None if v is None or str(v) == "/Off" else str(v)[1:]
     if isinstance(f, SignatureField):
-        return "firmato" if f.obj.get("/V") is not None else None
+        return t("firmato") if f.obj.get("/V") is not None else None
     v = f.value
     return None if v is None else str(v)
 
@@ -125,10 +126,10 @@ def read_records(path: Path) -> list[dict[str, str]]:
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
-            raise CliError(f"{path.name}: JSON non valido ({exc.msg}, riga {exc.lineno})") from None
+            raise CliError(t("{name}: JSON non valido ({msg}, riga {lineno})", name=path.name, msg=exc.msg, lineno=exc.lineno)) from None
         records = data if isinstance(data, list) else [data]
         if not all(isinstance(r, dict) for r in records):
-            raise CliError(f"{path.name}: serve un oggetto {{\"campo\": valore}} o una lista di oggetti")
+            raise CliError(t("{name}: serve un oggetto {{\"campo\": valore}} o una lista di oggetti", name=path.name))
         return records
     try:
         dialect = csv.Sniffer().sniff(text[:4096], delimiters=";,\t|")
@@ -136,7 +137,7 @@ def read_records(path: Path) -> list[dict[str, str]]:
         dialect = csv.excel
     rows = list(csv.DictReader(io.StringIO(text), dialect=dialect))
     if not rows:
-        raise CliError(f"{path.name}: nessuna riga di dati sotto l'intestazione")
+        raise CliError(t("{name}: nessuna riga di dati sotto l'intestazione", name=path.name))
     return rows
 
 
@@ -152,21 +153,20 @@ def fill(data: bytes, target: Path | None, values: dict, *, flatten: bool = Fals
     """Compila i campi; con target None controlla soltanto (per validare tutte le righe prima di scrivere)."""
     with open_pdf(data, password) as pdf:
         if "/AcroForm" not in pdf.Root:
-            raise CliError("il PDF non ha campi da compilare (per crearli: wpdf form)")
+            raise CliError(t("il PDF non ha campi da compilare (per crearli: wpdf form)"))
         if _has_signatures(pdf):
-            raise CliError("il PDF contiene firme digitali: modificarne i campi le renderebbe non valide")
+            raise CliError(t("il PDF contiene firme digitali: modificarne i campi le renderebbe non valide"))
         form = _form(pdf)
         names = [n for n, _ in form.items()]
         unknown = [k for k in values if k not in names]
         if unknown and not ignore_unknown:
-            raise CliError(f"campi inesistenti: {', '.join(unknown)}. Campi del modulo: {', '.join(names)}")
+            raise CliError(t("campi inesistenti: {join}. Campi del modulo: {join2}", join=', '.join(unknown), join2=', '.join(names)))
         known = {k: v for k, v in values.items() if k in names}
         for name, value in known.items():
             _set(form[name], name, value)
         problems = refresh_text_appearances(pdf)
         if problems and flatten:
-            raise CliError(f"caratteri non rappresentabili con il font standard nei campi: {', '.join(problems)}; "
-                           "senza --flatten il visualizzatore li mostra correttamente")
+            raise CliError(t("caratteri non rappresentabili con il font standard nei campi: {join}; senza --flatten il visualizzatore li mostra correttamente", join=', '.join(problems)))
         _leave_to_viewer(pdf, problems)
         if flatten:
             _flatten_widgets(pdf)
@@ -189,9 +189,9 @@ def _leave_to_viewer(pdf: pikepdf.Pdf, names: list[str]) -> None:
 
 def _set(f, name: str, value) -> None:
     if f.is_read_only:
-        raise CliError(f"«{name}» è in sola lettura: il modulo non ne prevede la compilazione")
+        raise CliError(t("«{name}» è in sola lettura: il modulo non ne prevede la compilazione", name=name))
     if isinstance(value, (list, dict)):
-        raise CliError(f"«{name}»: valore non valido (serve testo, numero o sì/no)")
+        raise CliError(t("«{name}»: valore non valido (serve testo, numero o sì/no)", name=name))
     if isinstance(f, (RadioButtonGroup, ChoiceField)) and (value is None or str(value).strip() == ""):
         return  # cella vuota: si lascia com'è
     if isinstance(f, CheckboxField):
@@ -200,23 +200,23 @@ def _set(f, name: str, value) -> None:
         options = _options(f)
         text = str(value)
         if text not in options:
-            raise CliError(f"«{name}»: valore «{text}» non previsto (scegli tra {', '.join(options)})")
+            raise CliError(t("«{name}»: valore «{text}» non previsto (scegli tra {join})", name=name, text=text, join=', '.join(options)))
         f.value = pikepdf.Name("/" + text)
     elif isinstance(f, ChoiceField):
         options = _options(f)
         text = str(value)
         if options and text not in options and not f.allow_edit:
-            raise CliError(f"«{name}»: valore «{text}» non previsto (scegli tra {', '.join(options)})")
+            raise CliError(t("«{name}»: valore «{text}» non previsto (scegli tra {join})", name=name, text=text, join=', '.join(options)))
         f.value = text
     elif isinstance(f, TextField):
         text = "" if value is None else str(value)
         if f.max_length and len(text) > f.max_length:
-            raise CliError(f"«{name}»: al massimo {f.max_length} caratteri")
+            raise CliError(t("«{name}»: al massimo {max_length} caratteri", name=name, max_length=f.max_length))
         f.value = text
     elif isinstance(f, SignatureField):
-        raise CliError(f"«{name}» è un campo firma: si compila firmando (fase firme), non con fill")
+        raise CliError(t("«{name}» è un campo firma: si compila firmando (fase firme), non con fill", name=name))
     else:
-        raise CliError(f"«{name}»: tipo di campo non compilabile")
+        raise CliError(t("«{name}»: tipo di campo non compilabile", name=name))
 
 
 def _truthy(value, name: str) -> bool:
@@ -227,17 +227,17 @@ def _truthy(value, name: str) -> bool:
         return True
     if text in FALSE_WORDS:
         return False
-    raise CliError(f"«{name}» è una casella: usa sì/no, true/false, 1/0 (non «{value}»)")
+    raise CliError(t("«{name}» è una casella: usa sì/no, true/false, 1/0 (non «{value}»)", name=name, value=value))
 
 
 def _flatten_widgets(pdf: pikepdf.Pdf) -> None:
     """Rende i campi parte della pagina; le altre annotazioni (evidenziazioni, note) restano."""
     if _has_signatures(pdf):
-        raise CliError("il PDF contiene firme digitali: appiattirlo le renderebbe non valide")
+        raise CliError(t("il PDF contiene firme digitali: appiattirlo le renderebbe non valide"))
     pdf.generate_appearance_streams()
     problems = refresh_text_appearances(pdf)  # il generatore di qpdf scrive «?» al posto delle accentate
     if problems:
-        raise CliError(f"caratteri non rappresentabili con il font standard nei campi: {', '.join(problems)}")
+        raise CliError(t("caratteri non rappresentabili con il font standard nei campi: {join}", join=', '.join(problems)))
     stash: list[tuple[pikepdf.Page, list]] = []
     for page in pdf.pages:
         annots = page.obj.get("/Annots")
@@ -297,25 +297,25 @@ def add_fields(data: bytes, target: Path, spec: dict, password: str | None = Non
 
     specs = spec.get("fields") if isinstance(spec, dict) else spec
     if not isinstance(specs, list) or not specs:
-        raise CliError('specifica vuota: serve {"fields": [{"name": ..., "type": ..., "rect" o "after": ...}]}')
+        raise CliError(t("specifica vuota: serve {\"fields\": [{\"name\": ..., \"type\": ..., \"rect\" o \"after\": ...}]}"))
     with open_pdf(data, password) as pdf:
         if _has_signatures(pdf):
-            raise CliError("il PDF contiene firme digitali: aggiungere campi le renderebbe non valide")
+            raise CliError(t("il PDF contiene firme digitali: aggiungere campi le renderebbe non valide"))
         _ensure_acroform(pdf)
         existing = {f.fully_qualified_name for f in pdf.acroform.fields}
         for i, item in enumerate(specs, start=1):
             if not isinstance(item, dict):
-                raise CliError(f"campo n. {i}: serve un oggetto con name, type e posizione")
+                raise CliError(t("campo n. {i}: serve un oggetto con name, type e posizione", i=i))
             name = str(item.get("name") or "").strip()
             kind = str(item.get("type", "text"))
             if not name:
-                raise CliError(f"campo n. {i}: manca il nome")
+                raise CliError(t("campo n. {i}: manca il nome", i=i))
             if kind not in FIELD_TYPES:
-                raise CliError(f"«{name}»: tipo «{kind}» sconosciuto (usa {', '.join(sorted(FIELD_TYPES))})")
+                raise CliError(t("«{name}»: tipo «{kind}» sconosciuto (usa {join})", name=name, kind=kind, join=', '.join(sorted(FIELD_TYPES))))
             if "." in name:
-                raise CliError(f"«{name}»: il punto nel nome separa i livelli dei campi, usa _ o -")
+                raise CliError(t("«{name}»: il punto nel nome separa i livelli dei campi, usa _ o -", name=name))
             if name in existing:
-                raise CliError(f"«{name}»: un campo con questo nome esiste già")
+                raise CliError(t("«{name}»: un campo con questo nome esiste già", name=name))
             existing.add(name)
             page_no, rect = _place(pdf, data, password, item, kind, find_rects)
             page = pdf.pages[page_no - 1]
@@ -366,45 +366,45 @@ def _place(pdf, data, password, item, kind, find_rects) -> tuple[int, list[float
     w = _number(item.get("width", dw), name, "width")
     h = _number(item.get("height", dh), name, "height")
     if w <= 0 or h <= 0:
-        raise CliError(f"«{name}»: width e height devono essere positivi")
+        raise CliError(t("«{name}»: width e height devono essere positivi", name=name))
     page_no = int(_number(item.get("page", 1), name, "page"))
     if not 1 <= page_no <= len(pdf.pages):
-        raise CliError(f"«{name}»: pagina {page_no} fuori dal documento (1-{len(pdf.pages)})")
+        raise CliError(t("«{name}»: pagina {page_no} fuori dal documento (1-{len})", name=name, page_no=page_no, len=len(pdf.pages)))
     if "rect" in item:
         raw = item["rect"]
         if not isinstance(raw, list) or len(raw) != 4:
-            raise CliError(f"«{name}»: rect vuole [x0, y0, x1, y1] in punti")
+            raise CliError(t("«{name}»: rect vuole [x0, y0, x1, y1] in punti", name=name))
         rect = [_number(v, name, "rect") for v in raw]
         if rect[0] >= rect[2] or rect[1] >= rect[3]:
-            raise CliError(f"«{name}»: rect vuole [x0, y0, x1, y1] con x0<x1 e y0<y1 (in punti)")
+            raise CliError(t("«{name}»: rect vuole [x0, y0, x1, y1] con x0<x1 e y0<y1 (in punti)", name=name))
     elif "after" in item:
         label = str(item["after"])
         numbers = [page_no] if "page" in item else None
         hits = find_rects(data, label, password, numbers)
         if not hits:
-            raise CliError(f"«{item['name']}»: etichetta «{label}» non trovata nel testo")
+            raise CliError(t("«{v}»: etichetta «{label}» non trovata nel testo", v=item['name'], label=label))
         page_no = min(hits)
         occurrence = int(_number(item.get("occurrence", 1), name, "occurrence"))
         if not 1 <= occurrence <= len(hits[page_no]):
-            raise CliError(f"«{item['name']}»: «{label}» compare {len(hits[page_no])} volte a pagina {page_no}")
+            raise CliError(t("«{v}»: «{label}» compare {len} volte a pagina {page_no}", v=item['name'], label=label, len=len(hits[page_no]), page_no=page_no))
         _, y0, x1, y1 = hits[page_no][occurrence - 1][-1]  # ultima riga dell'etichetta
         gap = _number(item.get("gap", 6), name, "gap")
         middle = (y0 + y1) / 2
         rect = [x1 + gap, middle - h / 2, x1 + gap + w, middle + h / 2]
     else:
-        raise CliError(f"«{item['name']}»: indica \"rect\" oppure \"after\" (un'etichetta del testo)")
+        raise CliError(t("«{v}»: indica \"rect\" oppure \"after\" (un'etichetta del testo)", v=item['name']))
     if not 1 <= page_no <= len(pdf.pages):
-        raise CliError(f"«{item['name']}»: pagina {page_no} fuori dal documento")
+        raise CliError(t("«{v}»: pagina {page_no} fuori dal documento", v=item['name'], page_no=page_no))
     return page_no, rect
 
 
 def _number(value, name: str, key: str) -> float:
     if isinstance(value, bool):
-        raise CliError(f"«{name}»: {key} deve essere un numero")
+        raise CliError(t("«{name}»: {key} deve essere un numero", name=name, key=key))
     try:
         return float(value)
     except (TypeError, ValueError):
-        raise CliError(f"«{name}»: {key} deve essere un numero (non «{value}»)") from None
+        raise CliError(t("«{name}»: {key} deve essere un numero (non «{value}»)", name=name, key=key, value=value)) from None
 
 
 DATE_FORMAT = re.compile(r"[dmyHhMstT/.\- :]{1,32}")
@@ -434,7 +434,7 @@ def _widget(pdf, page, name: str, kind: str, item: dict, rect) -> pikepdf.Dictio
             fmt = str(item.get("format", "dd/mm/yyyy"))
             if not DATE_FORMAT.fullmatch(fmt):
                 # Il formato finisce in uno script del PDF: solo lettere di data e separatori.
-                raise CliError(f"«{name}»: formato data «{fmt}» non valido (es. dd/mm/yyyy)")
+                raise CliError(t("«{name}»: formato data «{fmt}» non valido (es. dd/mm/yyyy)", name=name, fmt=fmt))
             js = f'AFDate_FormatEx("{fmt}");'
             widget.AA = pikepdf.Dictionary(
                 F=pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=pikepdf.String(js)),
@@ -452,7 +452,7 @@ def _widget(pdf, page, name: str, kind: str, item: dict, rect) -> pikepdf.Dictio
     elif kind in ("choice", "list"):
         options = [str(o) for o in item.get("options") or []]
         if not options:
-            raise CliError(f"«{name}»: un elenco vuole \"options\"")
+            raise CliError(t("«{name}»: un elenco vuole \"options\"", name=name))
         widget.FT = pikepdf.Name.Ch
         widget.Opt = pikepdf.Array([pikepdf.String(o) for o in options])
         widget.DA = pikepdf.String(f"/Helv {size:g} Tf 0 g")
@@ -462,7 +462,7 @@ def _widget(pdf, page, name: str, kind: str, item: dict, rect) -> pikepdf.Dictio
                 flags |= 1 << 18
         if item.get("value") is not None:
             if str(item["value"]) not in options:
-                raise CliError(f"«{name}»: value «{item['value']}» non è tra le options")
+                raise CliError(t("«{name}»: value «{v}» non è tra le options", name=name, v=item['value']))
             widget.V = pikepdf.String(str(item["value"]))
     elif kind == "signature":
         widget.FT = pikepdf.Name.Sig
@@ -494,15 +494,15 @@ def _add_radio(pdf, page, name: str, item: dict, rect) -> None:
     """Gruppo di scelte: "options" è una lista di {"value": ..., "rect" o "after": ...}; la prima posizione è rect."""
     options = item.get("options") or []
     if not options:
-        raise CliError(f"«{name}»: un gruppo di scelte vuole \"options\" con le posizioni")
+        raise CliError(t("«{name}»: un gruppo di scelte vuole \"options\" con le posizioni", name=name))
     parent = pdf.make_indirect(pikepdf.Dictionary(
         FT=pikepdf.Name.Btn, T=pikepdf.String(name), Ff=(1 << 15) | (1 << 14), Kids=pikepdf.Array(),
         V=pikepdf.Name.Off))
     values = [str(o.get("value", "")) if isinstance(o, dict) else str(o) for o in options]
     if any(not v.strip() or v == "Off" or not re.fullmatch(r"[\w\-]+", v) for v in values):
-        raise CliError(f"«{name}»: ogni opzione vuole un value fatto di lettere, cifre, _ o - (e diverso da Off)")
+        raise CliError(t("«{name}»: ogni opzione vuole un value fatto di lettere, cifre, _ o - (e diverso da Off)", name=name))
     if len(set(values)) != len(values):
-        raise CliError(f"«{name}»: due opzioni con lo stesso value")
+        raise CliError(t("«{name}»: due opzioni con lo stesso value", name=name))
     for k, option in enumerate(options):
         value = values[k]
         box = [_number(v, name, "rect") for v in option["rect"]] if isinstance(option, dict) and "rect" in option else (

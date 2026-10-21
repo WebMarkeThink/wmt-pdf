@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 from wmt_pdf.extract import Extractor, PageText
+from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError, Source
 
 TEXT_FORMATS = {"docx", "xlsx", "html", "md", "txt", "json", "xml"}
@@ -49,7 +50,7 @@ def export(source: Source, fmt: str, target: Path, *, password: str | None = Non
     if fmt in IMAGE_FORMATS:
         return export_images(source, fmt, target, dpi=dpi, password=password)
     if fmt not in TEXT_FORMATS:
-        raise CliError(f"formato di esportazione sconosciuto: {fmt}")
+        raise CliError(t("formato di esportazione sconosciuto: {fmt}", fmt=fmt))
     target.parent.mkdir(parents=True, exist_ok=True)
     if fmt in ("json", "xml"):
         data = structure(source, password, ocr)
@@ -236,11 +237,11 @@ def _to_xlsx(pages: list[PageText], target: Path) -> None:
     wb.remove(wb.active)
     for page in pages:
         for k, rows in enumerate(page.tables, start=1):
-            ws = wb.create_sheet(f"Pagina {page.page}" + (f" ({k})" if len(page.tables) > 1 else ""))
+            ws = wb.create_sheet(t("Pagina {page}", page=page.page) + (f" ({k})" if len(page.tables) > 1 else ""))
             for row in rows:
                 ws.append([parse_number(xml_safe(c)) for c in row])
     if not wb.worksheets:
-        raise CliError("nessuna tabella nel PDF da esportare in Excel: prova --to docx o md")
+        raise CliError(t("nessuna tabella nel PDF da esportare in Excel: prova --to docx o md"))
     wb.save(target)
 
 
@@ -249,7 +250,7 @@ def _to_html(pages: list[PageText], title: str) -> str:
            ("<style>body{font-family:sans-serif;max-width:50em;margin:2em auto;line-height:1.5}"
            "table{border-collapse:collapse}td,th{border:1px solid #999;padding:4px 8px}</style></head><body>")]
     for page in pages:
-        out.append(f"<section><h2>Pagina {page.page}</h2>")
+        out.append(t("<section><h2>Pagina {page}</h2>", page=page.page))
         for kind, block in _blocks(page):
             if kind == "text":
                 for para in re.split(r"\n\s*\n", block.strip()):
@@ -270,7 +271,7 @@ def _to_html(pages: list[PageText], title: str) -> str:
 def _to_md(pages: list[PageText], title: str) -> str:
     parts = [f"# {title}"]
     for page in pages:
-        parts.append(f"\n## Pagina {page.page}\n\n{page.text}")
+        parts.append(t("\n## Pagina {page}\n\n{text}", page=page.page, text=page.text))
     return "\n".join(parts) + "\n"
 
 

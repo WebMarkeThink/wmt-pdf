@@ -20,6 +20,7 @@ from pathlib import Path
 
 from pyhanko_certvalidator.registry import SimpleTrustManager, TrustManager
 
+from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError
 
 CACHE_ENV = "WPDF_CACHE_DIR"
@@ -102,8 +103,7 @@ def require_extra() -> None:
 
     for module in ("aiohttp", "signxml", "xsdata"):
         if importlib.util.find_spec(module) is None:
-            raise CliError("firma e verifica avanzata non installate: `uv sync --extra firma` "
-                           "(oppure pip install 'wmt-pdf[firma]')")
+            raise CliError(t("firma e verifica avanzata non installate: `uv sync --extra firma` (oppure pip install 'wmt-pdf[firma]')"))
 
 
 def update(territories: set[str] | None = None) -> dict:
@@ -148,8 +148,8 @@ async def _build(cache, territories, offline: bool):
             lotl = await fetch_lotl(client, cache)
             return await lotl_to_registry(lotl, client, cache=cache, only_territories=territories)
         except aiohttp.ClientError as exc:
-            hint = "nessuna copia locale: serve la rete" if offline else "rete non raggiungibile"
-            raise CliError(f"elenco europeo non disponibile ({hint}): {exc}") from None
+            hint = t("nessuna copia locale: serve la rete") if offline else t("rete non raggiungibile")
+            raise CliError(t("elenco europeo non disponibile ({hint}): {exc}", hint=hint, exc=exc)) from None
 
 
 def load_registry(territories: set[str]):
@@ -164,7 +164,7 @@ def load_registry(territories: set[str]):
     if not territories:
         return None
     cache = ExactFileCache(_root() / "xml", strict=True)
-    incomplete = CliError("copia locale dell'elenco europeo incompleta: `wpdf trust update`")
+    incomplete = CliError(t("copia locale dell'elenco europeo incompleta: `wpdf trust update`"))
     try:
         registry, errors = asyncio.run(_build(cache, territories, offline=True))
     except OfflineMiss:
@@ -219,7 +219,7 @@ def load_roots(paths: list[str]) -> list:
     for name in paths:
         path = Path(name)
         if not path.is_file():
-            raise CliError(f"certificato radice non trovato: {path}")
+            raise CliError(t("certificato radice non trovato: {path}", path=path))
         raw = path.read_bytes()
         try:
             if pem.detect(raw):
@@ -228,5 +228,5 @@ def load_roots(paths: list[str]) -> list:
                 roots.append(x509.Certificate.load(raw))
             _ = [r.subject.native for r in roots]  # forza la lettura: errori qui, non durante la verifica
         except (ValueError, TypeError) as exc:
-            raise CliError(f"{path.name}: certificato non leggibile ({exc})") from None
+            raise CliError(t("{name}: certificato non leggibile ({exc})", name=path.name, exc=exc)) from None
     return roots
