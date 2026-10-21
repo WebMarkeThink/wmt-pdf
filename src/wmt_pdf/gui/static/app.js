@@ -1,11 +1,11 @@
 // Interfaccia di wmt-pdf: barra dei file, schermata iniziale, strumenti, anteprima.
 import {
-  $, accepts, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, size, svg,
-  toast, upload,
+  $, accepts, api, collectOptions, desktop, downloadFile, el, fetchBlob, lang, loadI18n, missingOptions, post,
+  renderOptions, screenArea, size, svg, t, toast, upload,
 } from "./common.js";
 import {
   PDF_OPTIONS, clearSelection, closeDocument, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav,
-  pdfjs, redo, save, saveAs, undo,
+  pdfjs, redo, reopenDocument, save, saveAs, undo,
 } from "./doc.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -58,7 +58,7 @@ async function openCommand() {
 
 async function openUploaded(file) {
   if (!accepts([".pdf", ".p7m"], file.name)) {
-    toast(`${file.name}: per aprire serve un PDF; per convertire usa «Converti in PDF»`);
+    toast(t("{name}: per aprire serve un PDF; per convertire usa «Converti in PDF»", { name: file.name }));
     return;
   }
   try {
@@ -79,7 +79,7 @@ async function recentFiles() {
 
 function when(iso) {
   if (!iso) return "";
-  return new Date(iso).toLocaleString("it-IT", {
+  return new Date(iso).toLocaleString(lang() === "it" ? "it-IT" : "en-GB", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
 }
@@ -110,8 +110,8 @@ async function toggleRecentMenu() {
   if (!files.length) {
     const note = el("div", { class: "menu-empty" });
     note.textContent = isDesktop
-      ? "Nessun file recente."
-      : "I file recenti sono disponibili nella finestra di wmt-pdf (wpdf gui), non nel browser.";
+      ? t("Nessun file recente.")
+      : t("I file recenti sono disponibili nella finestra di wmt-pdf (wpdf gui), non nel browser.");
     menu.append(note);
   }
   for (const file of files) {
@@ -150,7 +150,7 @@ function bindCompact() {
   });
   $("compact-menu").querySelectorAll("[data-side]").forEach((item) => item.addEventListener("click", () => {
     closeMenu();
-    window.pywebview?.api?.compact(item.dataset.side);
+    window.pywebview?.api?.compact(item.dataset.side, screenArea());
   }));
 }
 
@@ -168,7 +168,7 @@ window.wpdfExternal = async (action) => {
   for (const info of action.files || []) {
     if (state.files.length >= tool.max_files) break;
     if (accepts(tool.accept, info.name)) state.files.push(info);
-    else toast(`${info.name}: formato non adatto a ${tool.label}`);
+    else toast(t("{name}: formato non adatto a {tool}", { name: info.name, tool: tool.label }));
   }
   renderFiles();
   return undefined;
@@ -179,7 +179,7 @@ window.wpdfExternal = async (action) => {
 function renderCategories() {
   const nav = $("categories");
   nav.innerHTML = "";
-  const seen = new Map([["tutti", ["Tutti gli strumenti", "#667085"]]]);
+  const seen = new Map([["tutti", [t("Tutti gli strumenti"), "#667085"]]]);
   for (const tool of state.tools) if (!tool.hidden) seen.set(tool.category, [tool.category_label, tool.color]);
   for (const [id, [label, color]] of seen) {
     const button = el("button", { type: "button", "aria-current": String(id === state.category) },
@@ -223,9 +223,11 @@ function openTool(tool) {
   $("tool-name").textContent = tool.label;
   $("tool-desc").textContent = tool.description;
   $("file-input").multiple = tool.max_files > 1;
-  const kinds = tool.accept.includes("*") ? "qualsiasi formato supportato" : tool.accept.join(", ");
+  const kinds = tool.accept.includes("*") ? t("qualsiasi formato supportato") : tool.accept.join(", ");
   $("drop-hint").textContent =
-    `oppure fai clic per sceglierli · ${tool.max_files > 1 ? `fino a ${tool.max_files} file, ` : ""}${kinds}`;
+    t("oppure fai clic per sceglierli · {limit}{kinds}", {
+      limit: tool.max_files > 1 ? t("fino a {n} file, ", { n: tool.max_files }) : "", kinds,
+    });
   renderOptions($("options"), tool, state.optionFiles, updateRun);
   renderFiles();
   show("tool");
@@ -241,10 +243,10 @@ function renderFiles() {
     name.textContent = file.name;
     item.append(name, el("span", { class: "size" }, size(file.size)));
     if (state.tool.max_files > 1) {
-      item.append(el("button", { class: "icon-btn", type: "button", "aria-label": "Sposta su", onclick: () => move(index, -1) }, ICON_UP));
-      item.append(el("button", { class: "icon-btn", type: "button", "aria-label": "Sposta giù", onclick: () => move(index, 1) }, ICON_DOWN));
+      item.append(el("button", { class: "icon-btn", type: "button", "aria-label": t("Sposta su"), onclick: () => move(index, -1) }, ICON_UP));
+      item.append(el("button", { class: "icon-btn", type: "button", "aria-label": t("Sposta giù"), onclick: () => move(index, 1) }, ICON_DOWN));
     }
-    item.append(el("button", { class: "icon-btn", type: "button", "aria-label": "Togli", onclick: () => {
+    item.append(el("button", { class: "icon-btn", type: "button", "aria-label": t("Togli"), onclick: () => {
       state.files.splice(index, 1);
       renderFiles();
     } }, ICON_X));
@@ -265,13 +267,13 @@ async function addFiles(fileList) {
   const session = state.session;
   for (const file of fileList) {
     if (!accepts(tool.accept, file.name)) {
-      toast(`${file.name}: formato non adatto a ${tool.label}`);
+      toast(t("{name}: formato non adatto a {tool}", { name: file.name, tool: tool.label }));
       continue;
     }
     if (state.files.length + state.pending >= tool.max_files) {
       if (tool.max_files === 1 && !state.pending) state.files = [];
       else {
-        toast(`Al massimo ${tool.max_files} file`);
+        toast(t("Al massimo {n} file", { n: tool.max_files }));
         break;
       }
     }
@@ -292,7 +294,7 @@ async function addFiles(fileList) {
 function missing() {
   const tool = state.tool;
   if (state.files.length < tool.min_files) {
-    return tool.min_files > 1 ? `Servono almeno ${tool.min_files} file` : "Scegli un file";
+    return tool.min_files > 1 ? t("Servono almeno {n} file", { n: tool.min_files }) : t("Scegli un file");
   }
   return missingOptions(tool, collectOptions($("options"), tool, state.optionFiles));
 }
@@ -331,9 +333,9 @@ function showResult(result) {
   const failed = result.code !== 0 && !(signatureTool && [2, 3].includes(result.code));
   output.classList.toggle("error", failed);
   const badge = $("verdict");
-  let [label, kind] = failed ? ["Errore", "bad"] : ["Fatto", "ok"];
+  let [label, kind] = failed ? [t("Errore"), "bad"] : [t("Fatto"), "ok"];
   if (signatureTool) {
-    const verdicts = { 0: ["Firme valide", "ok"], 2: ["Non valida", "bad"], 3: ["Non verificabile", "warn"] };
+    const verdicts = { 0: [t("Firme valide"), "ok"], 2: [t("Non valida"), "bad"], 3: [t("Non verificabile"), "warn"] };
     [label, kind] = verdicts[result.code] || [label, kind];
   }
   badge.textContent = label;
@@ -347,10 +349,10 @@ function showResult(result) {
     name.textContent = file.name;
     item.append(name, el("span", { class: "muted small" }, size(file.size)));
     if (file.kind === "pdf") {
-      item.append(el("button", { class: "btn", type: "button", onclick: () => preview(file) }, "Anteprima"));
-      item.append(el("button", { class: "btn", type: "button", onclick: () => openDocument({ file_id: file.id }) }, "Apri"));
+      item.append(el("button", { class: "btn", type: "button", onclick: () => preview(file) }, t("Anteprima")));
+      item.append(el("button", { class: "btn", type: "button", onclick: () => openDocument({ file_id: file.id }) }, t("Apri")));
     }
-    const download = el("button", { class: "btn", type: "button" }, "Scarica");
+    const download = el("button", { class: "btn", type: "button" }, t("Scarica"));
     download.addEventListener("click", () => downloadFile(file.id, file.name).catch((e) => toast(e.message)));
     item.append(download);
     list.append(item);
@@ -374,7 +376,7 @@ async function preview(file) {
     $("viewer").showModal();
     await draw();
   } catch (error) {
-    toast(`Anteprima non disponibile: ${error.message}`);
+    toast(t("Anteprima non disponibile: {error}", { error: error.message }));
   }
 }
 
@@ -512,7 +514,45 @@ function bindDrop() {
   });
 }
 
+// --- lingua -------------------------------------------------------------------------------------------
+
+const REOPEN = "wpdf-reopen";
+
+function bindLanguage() {
+  const select = $("language");
+  select.value = lang();
+  select.addEventListener("change", async () => {
+    try {
+      await post("/api/settings", { language: select.value });
+    } catch (error) {
+      toast(error.message);
+      select.value = lang();
+      return;
+    }
+    // La pagina si ricarica nella nuova lingua; il documento aperto (con le sue versioni) resta sul server.
+    const doc = currentDoc();
+    try {
+      if (doc) sessionStorage.setItem(REOPEN, doc.id);
+    } catch {
+      // senza sessionStorage il documento si riapre dai recenti
+    }
+    window.location.reload();
+  });
+}
+
+async function reopenAfterReload() {
+  let id = null;
+  try {
+    id = sessionStorage.getItem(REOPEN);
+    sessionStorage.removeItem(REOPEN);
+  } catch {
+    return;
+  }
+  if (id) await reopenDocument(id).catch(() => {});
+}
+
 async function start() {
+  await loadI18n();
   state.tools = await api("/api/tools");
   initDocs({ show, updateBar, tools: () => state.tools });
   $("search").addEventListener("input", renderGrid);
@@ -522,7 +562,9 @@ async function start() {
   bindCompact();
   bindDrop();
   bindViewer();
+  bindLanguage();
   show("home");
+  await reopenAfterReload();
 }
 
-start().catch((error) => toast(`Avvio non riuscito: ${error.message}`));
+start().catch((error) => toast(t("Avvio non riuscito: {error}", { error: error.message })));

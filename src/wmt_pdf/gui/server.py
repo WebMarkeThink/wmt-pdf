@@ -123,6 +123,7 @@ class GuiServer(ThreadingHTTPServer):
             finally:
                 for key in env:
                     os.environ.pop(key, None)
+                self.set_language(self.language)  # main() ha impostato quella del comando: può essere cambiata
             return code, out.getvalue(), err.getvalue()
 
 
@@ -215,6 +216,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"desktop": self.server.desktop, "files": recent() if self.server.desktop else []})
         if path == "/api/settings":
             return self._json(200, settings())
+        if path == "/api/i18n":
+            from wmt_pdf.i18n import catalog as messages
+
+            return self._json(200, messages(self.server.language))
         if path.startswith("/api/doc/"):
             return self._doc_get(path[len("/api/doc/"):])
         if path.startswith("/api/file/"):
@@ -426,6 +431,7 @@ class DesktopApi:
     _window: Any = None  # finestra di pywebview, assegnata dopo create_window
 
     _compact: Any = None  # barra compatta, quando c'è
+    _compact_lock = threading.Lock()  # un doppio clic su «Compatta» non deve aprire due barre
 
     def __init__(self, server: GuiServer):
         self._server = server
@@ -463,34 +469,43 @@ class DesktopApi:
 
     # --- barra compatta ---
 
-    def compact(self, side: str = "top") -> str:
+    def _area(self, area, window) -> tuple[int, int, int, int]:
+        """Area utile dello schermo: quella che dà la pagina (screen.avail*, già nelle unità di move e resize anche
+        con lo schermo in scala), altrimenti quella del sistema."""
+        import webview
+
+        from wmt_pdf.gui.compact import parse_area, screen_of, work_area
+
+        return parse_area(area) or work_area(screen_of(window, webview.screens))
+
+    def compact(self, side: str = "top", area=None) -> str:
         """Nasconde la finestra principale e mostra la barra compatta sul lato scelto (top, right, bottom, left)."""
         import webview
 
-        from wmt_pdf.gui.compact import SIDES, geometry, screen_of, work_area
+        from wmt_pdf.gui.compact import SIDES, geometry
 
         side = side if side in SIDES else "top"
-        if self._compact is not None:
-            self.dock(side)
-        else:
-            x, y, width, height = geometry(side, work_area(screen_of(self._window, webview.screens)))
-            port = self._server.server_address[1]
-            self._compact = webview.create_window(
-                "wmt-pdf", f"http://127.0.0.1:{port}/compact?side={side}", js_api=self, x=x, y=y, width=width,
-                height=height, frameless=True, easy_drag=False, on_top=True, resizable=False, background_color="#161b26")
-            self._compact.events.closed += self._compact_closed
+        with self._compact_lock:
+            if self._compact is not None:
+                self.dock(side, area)
+            else:
+                x, y, width, height = geometry(side, self._area(area, self._window))
+                port = self._server.server_address[1]
+                self._compact = webview.create_window(
+                    "wmt-pdf", f"http://127.0.0.1:{port}/compact?side={side}", js_api=self, x=x, y=y, width=width,
+                    height=height, frameless=True, easy_drag=False, on_top=True, resizable=False,
+                    background_color="#161b26")
+                self._compact.events.closed += self._compact_closed
         self._window.hide()
         return side
 
-    def dock(self, side: str) -> str:
+    def dock(self, side: str, area=None) -> str:
         """Sposta la barra compatta su un altro lato dello schermo in cui si trova."""
-        import webview
-
-        from wmt_pdf.gui.compact import SIDES, geometry, screen_of, work_area
+        from wmt_pdf.gui.compact import SIDES, geometry
 
         if self._compact is None or side not in SIDES:
             return ""
-        x, y, width, height = geometry(side, work_area(screen_of(self._compact, webview.screens)))
+        x, y, width, height = geometry(side, self._area(area, self._compact))
         self._compact.resize(width, height)
         self._compact.move(x, y)
         return side
@@ -499,11 +514,11 @@ class DesktopApi:
         """Torna alla finestra completa; con un'azione (aprire un file, uno strumento, i recenti) la esegue lì."""
         from wmt_pdf.gui.compact import clean_action, run_action_js
 
+        cleaned = clean_action(action, set(TOOLS))  # prima di tutto: un'azione malformata non lascia nulla a metà
         compact, self._compact = self._compact, None
         self._window.show()
         if compact is not None:
             compact.destroy()
-        cleaned = clean_action(action, set(TOOLS))
         if cleaned:
             self._window.evaluate_js(run_action_js(cleaned))
 

@@ -190,7 +190,7 @@ def cmd_verify(args) -> int:
     else:
         lines = []
         for n, r in enumerate(reports, start=1):
-            lines.append(t("Firma {n} di {len} · {kind} · {label}", n=n, len=len(reports), kind=r.kind, label=t(r.label, **r.label_values)))
+            lines.append(t("Firma {n} di {len} · {kind} · {label}", n=n, len=len(reports), kind=r.kind, label=t(r.label_key, **r.label_values) if r.label_key else r.label))
             who = r.signer or "?"
             if r.fiscal_code:
                 who += f" (CF {r.fiscal_code})"

@@ -147,3 +147,34 @@ def test_compact_page_has_token(server):
     with urllib.request.urlopen(url) as resp:
         html = resp.read().decode("utf-8")
     assert server.token in html and "compact.js" in html
+
+
+def test_area_from_the_page_wins_and_is_validated(desktop):
+    from wmt_pdf.gui.compact import parse_area
+
+    assert parse_area({"x": 0, "y": 0, "width": 1280, "height": 680}) == (0, 0, 1280, 680)
+    assert parse_area({"x": "a", "y": 0, "width": 1280, "height": 680}) is None
+    assert parse_area({"x": 0, "y": 0, "width": 10, "height": 680}) is None  # troppo piccola: valori assurdi
+    assert parse_area([1, 2]) is None
+    api, _, created = desktop
+    # Schermo in scala 150%: la pagina vede 1280x680 pixel CSS, ed è in queste unità che pywebview sposta.
+    api.compact("bottom", {"x": 0, "y": 0, "width": 1280, "height": 680})
+    bar = created[0]
+    assert (bar.kwargs["x"], bar.kwargs["y"]) == (340, 624)
+    api.compact("top", {"x": 0, "y": 0, "width": 1280, "height": 680})  # già aperta: si sposta, non se ne apre un'altra
+    assert len(created) == 1 and ("move", 340, 0) in bar.calls
+
+
+def test_malformed_action_is_cleaned_before_closing_the_bar(desktop):
+    api, main, created = desktop
+    api.compact("top")
+    api.expand({"tool": "merge", "files": [{"id": "abc", "name": "x" * 1000, "size": "molto"}]})
+    js = next(c[1] for c in main.calls if c[0] == "evaluate_js")
+    assert '"size": 0' in js and "x" * 256 not in js and ("destroy",) in created[0].calls
+
+
+def test_report_label_stays_readable():
+    from wmt_pdf.verify import Report
+
+    report = Report(kind="PDF", label="", label_key="campo {field}", label_values={"field": "Firma1"})
+    assert report.label == "campo Firma1"  # così nel JSON di verify, come prima

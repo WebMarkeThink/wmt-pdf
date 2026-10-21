@@ -178,8 +178,10 @@ def cmd_addtext(args) -> int:
     source, password, target = _prepare(args)
     lines = add_text(source.data, target, args.page, x, y, args.text.replace("\\n", "\n"), size=args.size,
                      color=color, bold=args.bold, password=password)
-    what = "aggiunta 1 riga" if lines == 1 else f"aggiunte {lines} righe"
-    print(t("{target}: {what} di testo a pagina {page}", target=target, what=what, page=args.page))
+    if lines == 1:
+        print(t("{target}: aggiunta 1 riga di testo a pagina {page}", target=target, page=args.page))
+    else:
+        print(t("{target}: aggiunte {n} righe di testo a pagina {page}", target=target, n=lines, page=args.page))
     return EXIT_OK
 
 

@@ -28,6 +28,19 @@ def work_area(screen: Any) -> tuple[int, int, int, int]:
         return int(screen.x), int(screen.y), int(screen.width), int(screen.height)
 
 
+def parse_area(area: Any) -> tuple[int, int, int, int] | None:
+    """Area utile mandata dalla pagina: {x, y, width, height} in pixel CSS; None se manca o non ha senso."""
+    if not isinstance(area, dict):
+        return None
+    try:
+        x, y, width, height = (int(float(area[k])) for k in ("x", "y", "width", "height"))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if not (100 <= width <= 100_000 and 100 <= height <= 100_000 and abs(x) <= 100_000 and abs(y) <= 100_000):
+        return None
+    return x, y, width, height
+
+
 def geometry(side: str, area: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
     """Posizione e dimensioni della barra: centrata sul lato scelto, mai più grande dell'area utile."""
     ax, ay, aw, ah = area
@@ -70,11 +83,16 @@ def clean_action(action: Any, tool_ids: set[str]) -> dict | None:
         result["open_file"] = action["open_file"]
     files = action.get("files")
     if isinstance(files, list):
-        result["files"] = [
-            {"id": str(f["id"]), "name": str(f.get("name", "")), "size": int(f.get("size") or 0),
-             "kind": str(f.get("kind", ""))}
-            for f in files[:50] if isinstance(f, dict) and str(f.get("id", "")).isalnum()
-        ]
+        result["files"] = []
+        for f in files[:50]:
+            if not isinstance(f, dict) or not str(f.get("id", "")).isalnum():
+                continue
+            size = f.get("size")
+            result["files"].append({
+                "id": str(f["id"])[:64], "name": str(f.get("name", ""))[:255],
+                "size": size if isinstance(size, int) and not isinstance(size, bool) and size >= 0 else 0,
+                "kind": str(f.get("kind", ""))[:16],
+            })
     return result or None
 
 

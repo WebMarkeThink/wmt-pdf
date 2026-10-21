@@ -1,7 +1,8 @@
 // Vista documento: pagina con testo modificabile, miniature, strumenti, versioni e salvataggio.
 import * as pdfjs from "/static/vendor/pdf.min.mjs";
 import {
-  $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, toast, upload,
+  $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, t, toast,
+  upload,
 } from "./common.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.min.mjs";
@@ -56,7 +57,7 @@ export function initDocs(context) {
   $("highlight-btn").addEventListener("click", () => {
     const query = $("find-text").value;
     if (query) apply("highlight", { query });
-    else toast("Scrivi prima il testo da evidenziare");
+    else toast(t("Scrivi prima il testo da evidenziare"));
   });
   $("pop-cancel").addEventListener("click", closePopover);
   $("td-cancel").addEventListener("click", () => $("tool-dialog").close());
@@ -69,7 +70,8 @@ export function initDocs(context) {
 
 export async function openDocument(body) {
   if (doc.state?.modified &&
-      !window.confirm(`«${doc.state.name}» ha modifiche non salvate. Vuoi aprire un altro documento e perderle?`)) {
+      !window.confirm(t("«{name}» ha modifiche non salvate. Vuoi aprire un altro documento e perderle?",
+        { name: doc.state.name }))) {
     return;
   }
   try {
@@ -80,6 +82,13 @@ export async function openDocument(body) {
   } catch (error) {
     toast(`Apertura non riuscita: ${error.message}`);
   }
+}
+
+// Dopo un ricaricamento della pagina (es. cambio di lingua): il documento è ancora aperto sul server.
+export async function reopenDocument(id) {
+  const state = await api(`/api/doc/${id}`);
+  ctx.show("doc");
+  await load(state);
 }
 
 async function load(state) {
@@ -165,7 +174,7 @@ async function loadTextBoxes() {
     // PDF.js 6 converte solo punti: il riquadro si ricava dai due angoli.
     const [x0, y0] = doc.viewport.convertToViewportPoint(obj.bbox[0], obj.bbox[1]);
     const [x1, y1] = doc.viewport.convertToViewportPoint(obj.bbox[2], obj.bbox[3]);
-    const name = KIND_NAMES[obj.kind];
+    const name = t(KIND_NAMES[obj.kind]);
     let title = obj.label; // testo: il testo stesso
     if (obj.kind !== "text") title = obj.label === name ? name : `${name}: ${obj.label}`;
     const box = el("div", { class: `tbox kind-${obj.kind}`, title });
@@ -192,8 +201,9 @@ function select(obj, box) {
   doc.selected = obj ? { obj, box, timer: null, start: null } : null;
   if (!obj) return;
   box.classList.add("selected");
-  message(`Selezionato: ${KIND_NAMES[obj.kind].toLowerCase()}. Trascinalo, oppure frecce per spostarlo (Maiusc: di più)${
-    obj.kind === "text" ? "; doppio clic per modificarlo" : ""}`);
+  const hint = t("Selezionato: {kind}. Trascinalo, oppure frecce per spostarlo (Maiusc: di più)",
+    { kind: t(KIND_NAMES[obj.kind]).toLowerCase() });
+  message(hint + (obj.kind === "text" ? t("; doppio clic per modificarlo") : ""));
 }
 
 async function moveObject(obj, dxPdf, dyPdf) {
@@ -361,8 +371,8 @@ function onOverlayClick(event) {
   $("overlay").querySelectorAll(".marker").forEach((m) => m.remove());
   $("overlay").append(marker);
   openPopover({
-    title: "Testo da aggiungere", text: "", extra: true, remove: false,
-    note: "Il testo inizia dal punto scelto. Va a capo con Invio.",
+    title: t("Testo da aggiungere"), text: "", extra: true, remove: false,
+    note: t("Il testo inizia dal punto scelto. Va a capo con Invio."),
     anchor: { left: event.clientX, top: event.clientY },
     onApply: (values) => apply("addtext", {
       page: doc.page, at: `${px.toFixed(2)},${py.toFixed(2)}`, text: values.text,
@@ -378,9 +388,9 @@ function editObject(obj, box) {
   const target = { page: doc.page, index: obj.index };
   const screen = box.getBoundingClientRect();
   openPopover({
-    title: "Modifica testo", text: obj.text, extra: false, remove: true,
+    title: t("Modifica testo"), text: obj.text, extra: false, remove: true,
     note: obj.embedded
-      ? "Font incorporato: se servono lettere che il file non contiene, il testo viene riscritto con un font di sistema."
+      ? t("Font incorporato: se servono lettere che il file non contiene, il testo viene riscritto con un font di sistema.")
       : "",
     anchor: { left: screen.left, top: screen.bottom },
     onApply: (values) => apply("edittext", { ...target, text: values.text.replace(/\n/g, " ") }),
@@ -411,7 +421,7 @@ function openPopover({ title, text, extra, remove, note, anchor, onApply, onDele
       bold: $("pop-bold").checked,
     };
     if (!values.text.trim()) {
-      toast("Scrivi un testo, oppure usa «Elimina»");
+      toast(t("Scrivi un testo, oppure usa «Elimina»"));
       return;
     }
     closePopover();
@@ -448,7 +458,7 @@ function message(text, isError = false) {
 export async function apply(tool, options, extra = {}) {
   if (!doc.state || doc.busy) return;
   doc.busy = true;
-  message("Elaborazione…");
+  message(t("Elaborazione…"));
   try {
     const result = await post(`/api/doc/${doc.state.id}/apply`, { tool, options, ...extra });
     // Nel documento il nome del file intermedio non interessa: resta solo cosa è successo.
@@ -473,7 +483,7 @@ function showOutputs(outputs) {
   const box = $("doc-message");
   for (const file of outputs) {
     const link = el("button", { class: "btn", type: "button" });
-    link.textContent = `Scarica ${file.name}`;
+    link.textContent = t("Scarica {name}", { name: file.name });
     link.addEventListener("click", () => downloadFile(file.id, file.name).catch((e) => toast(e.message)));
     box.append(document.createElement("br"), link);
   }
@@ -482,10 +492,10 @@ function showOutputs(outputs) {
 async function deletePage() {
   if (!doc.pdf) return;
   if (doc.pdf.numPages === 1) {
-    toast("È l'unica pagina del documento");
+    toast(t("È l'unica pagina del documento"));
     return;
   }
-  if (window.confirm(`Eliminare la pagina ${doc.page}?`)) await apply("pages", { delete: String(doc.page) });
+  if (window.confirm(t("Eliminare la pagina {page}?", { page: doc.page }))) await apply("pages", { delete: String(doc.page) });
 }
 
 async function step(action) {
@@ -535,7 +545,7 @@ export async function saveAs() {
       toast(error.message);
       return false;
     }
-    toast("Nel browser «Salva» scarica il file: per salvare direttamente sul disco usa la finestra di wmt-pdf");
+    toast(t("Nel browser «Salva» scarica il file: per salvare direttamente sul disco usa la finestra di wmt-pdf"));
     return true;
   }
   const path = await window.pywebview.api.save_dialog(doc.state.name);
@@ -555,7 +565,7 @@ export async function saveAs() {
 
 function askClose() {
   const dialog = $("close-dialog");
-  $("cd-desc").textContent = `«${doc.state.name}» ha modifiche non salvate.`;
+  $("cd-desc").textContent = t("«{name}» ha modifiche non salvate.", { name: doc.state.name });
   return new Promise((resolve) => {
     const done = (choice) => {
       dialog.removeEventListener("cancel", onCancel);
@@ -620,7 +630,7 @@ async function runMerge() {
   $("merge-dialog").close();
   const files = mergeFiles;
   mergeFiles = [];
-  message(`Caricamento di ${files.length} file…`);
+  message(t("Caricamento di {n} file…", { n: files.length }));
   let ids;
   try {
     ids = (await Promise.all(files.map((f) => upload(f)))).map((info) => info.id);
@@ -658,7 +668,7 @@ function openToolDialog(tool) {
   $("td-title").textContent = tool.label;
   $("td-desc").textContent = tool.description;
   renderOptions($("td-options"), tool, doc.dialogFiles, () => {});
-  $("td-run").textContent = ["pdf", "fill", "signed"].includes(tool.output) ? "Applica al documento" : "Esegui";
+  $("td-run").textContent = ["pdf", "fill", "signed"].includes(tool.output) ? t("Applica al documento") : t("Esegui");
   $("tool-dialog").showModal();
 }
 

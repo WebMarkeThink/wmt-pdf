@@ -247,7 +247,10 @@ def cmd_rotate(args) -> int:
     source, password, target = _prepare(args)
     numbers = parse_pages(args.pages, _count(source.data, password))
     rotate(source.data, args.angle, numbers, target, password)
-    print(t("{target}: {len} pagine ruotate di {angle}°", target=target, len=len(numbers), angle=args.angle))
+    if len(numbers) == 1:
+        print(t("{target}: 1 pagina ruotata di {angle}°", target=target, angle=args.angle))
+    else:
+        print(t("{target}: {len} pagine ruotate di {angle}°", target=target, len=len(numbers), angle=args.angle))
     return EXIT_OK
 
 
@@ -473,7 +476,8 @@ def cmd_fill(args) -> int:
         target = Path(args.output)
         check_target(target, [Path(args.file), data_file], args.force)
         result = fill(source.data, target, records[0], flatten=args.flatten, ignore_unknown=is_csv, password=password)
-        print(f"{target}: {result.filled} campi compilati" + (", appiattito" if args.flatten else ""))
+        flat = t(", appiattito") if args.flatten else ""
+        print(t("{target}: {n} campi compilati{flat}", target=target, n=result.filled, flat=flat))
         _fill_notes(result)
         return EXIT_OK
     outdir = Path(args.output)

@@ -69,7 +69,12 @@ class Report:
     bottom_line: bool | None = None  # giudizio complessivo di pyHanko, come controllo in più
     error: str | None = None  # errore interno: la firma non è stata giudicata
     problems: list[str] = field(default_factory=list)
-    label_values: dict = field(default_factory=dict)  # valori dei segnaposto di label (si traduce quando si mostra)
+    label_key: str = ""  # modello di label (testo italiano con segnaposto): si traduce quando si mostra
+    label_values: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.label_key and not self.label:
+            self.label = self.label_key.format(**self.label_values)  # nel JSON resta il testo, come prima
 
     @property
     def verdict(self) -> str:
@@ -180,7 +185,7 @@ def _fill_common(report: Report, status, manager, registry, offline: bool) -> No
         # Una marca vale come data certa solo se emessa da un servizio fidato.
         report.timestamp_ok = bool(ts.intact and ts.valid and ts.trusted)
         if not report.timestamp_ok:
-            report.problems.append(t("marca temporale non attendibile"))
+            report.problems.append(N_("marca temporale non attendibile"))  # tradotto quando si mostra
 
 
 def _qualification(path, registry, report: Report) -> str | None:
@@ -233,7 +238,7 @@ def verify_pdf(data: bytes, roots, offline: bool) -> list[Report]:
     reports = []
     for sig in embedded:
         report = Report(kind="PAdES" if "ETSI" in str(sig.sig_object.get("/SubFilter", "")) else "PDF",
-                        label="campo {field}", label_values={"field": sig.field_name})
+                        label="", label_key=N_("campo {field}"), label_values={"field": sig.field_name})
         certs = [c.chosen for c in (sig.signed_data["certificates"] or []) if c.name == "certificate"]
         context, manager, registry = verifier.context(certs)  # errori dell'elenco: CliError, non un esito
         try:
@@ -284,11 +289,11 @@ def verify_p7m(data: bytes, roots, offline: bool) -> list[Report]:
         context, manager, registry = verifier.context(certs)
         infos = list(signed["signer_infos"])
         if not infos:
-            reports.append(Report(kind="CAdES", label=N_("livello {depth}"), label_values={"depth": depth},
+            reports.append(Report(kind="CAdES", label="", label_key=N_("livello {depth}"), label_values={"depth": depth},
                                   problems=[N_("nessun firmatario")]))
         for k, info in enumerate(infos, start=1):
             label = N_("livello {depth}, firmatario {k}") if len(infos) > 1 else N_("livello {depth}")
-            report = Report(kind="CAdES", label=label, label_values={"depth": depth, "k": k})
+            report = Report(kind="CAdES", label="", label_key=label, label_values={"depth": depth, "k": k})
             single = signed.copy()
             single["signer_infos"] = cms.SignerInfos([info])  # pyhanko verifica un firmatario per volta
             # Busta senza contenuto + contenuto a parte: così pyhanko valuta anche la marca temporale.

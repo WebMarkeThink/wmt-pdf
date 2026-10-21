@@ -44,8 +44,19 @@ modifiche non salvate si sceglie tra Salva, Non salvare e Annulla.
 - **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,
   proteggi e firma) per lavorare su uno o più file; i PDF risultanti si aprono come documento con «Apri».
 
-Scorciatoie: Ctrl+O apri, Ctrl+S salva, Ctrl+Maiusc+S salva con nome, Ctrl+Z annulla, Ctrl+Y ripeti, frecce o
-PagSu/PagGiù per le pagine. Prima di chiudere con modifiche non salvate viene chiesta conferma.
+Scorciatoie: Ctrl+O apri, Ctrl+S salva, Ctrl+Maiusc+S salva con nome, Ctrl+W chiudi il documento, Ctrl+Z annulla,
+Ctrl+Y ripeti, frecce o PagSu/PagGiù per le pagine. Prima di chiudere con modifiche non salvate viene chiesta
+conferma.
+
+**Barra compatta** (solo nella finestra nativa): «Compatta» nella barra in alto e la scelta del lato (in alto, in
+basso, a sinistra, a destra). La finestra si nasconde e resta una barra sempre in primo piano, agganciata a quel
+lato dello schermo, con Apri, Recenti, Unisci, Converti, Comprimi, OCR e Firma. I file trascinati sulla barra si
+aprono (un PDF) o si uniscono (più file); trascinati su un pulsante vanno a quello strumento. La freccia sposta la
+barra sul lato successivo, la maniglia a sinistra la trascina dove si vuole; «Espandi» (o Esc) riporta la finestra
+completa. Oltre a questa resta la normale riduzione a icona della finestra.
+
+**Lingua**: italiano o inglese, dal selettore in basso a sinistra; la scelta resta tra una sessione e l'altra e vale
+anche per i messaggi dei comandi eseguiti dall'interfaccia. Il documento aperto resta aperto al cambio di lingua.
 
 Nella finestra nativa «Apri» e «Salva con nome» usano le finestre di dialogo del sistema, «Salva» riscrive il file
 aperto e i file recenti restano tra una sessione e l'altra. Nel browser (senza l'extra `gui`) si lavora su copie:
@@ -159,6 +170,13 @@ Cosa fa `text` per risparmiare token:
 - scrive le tabelle in Markdown e scarta i riquadri grafici scambiati per tabelle;
 - mette segnaposto per le immagini invece delle immagini stesse;
 - con `--max-tokens` si ferma tra una pagina e l'altra e dice da dove continuare.
+
+## Lingua dei messaggi
+
+I messaggi della CLI sono in italiano o in inglese: `wpdf --language en ...`, oppure la variabile `WPDF_LANG=en`;
+senza nessuna delle due si usa la lingua del sistema (italiano se il sistema è in italiano, altrimenti inglese).
+Le traduzioni stanno in `src/wmt_pdf/locales/en.json`, con il testo italiano come chiave; un test controlla che non
+ne manchi nessuna (`uv run python tests/i18n_keys.py` elenca quelle da aggiungere).
 
 ## Uso con Claude Code
 

@@ -1,5 +1,5 @@
 // Barra compatta: comandi rapidi; i file trascinati si caricano qui e si aprono nella finestra completa.
-import { $, accepts, api, el, svg, upload } from "./common.js";
+import { $, accepts, api, el, loadI18n, screenArea, svg, t, upload } from "./common.js";
 
 const SIDES = ["top", "right", "bottom", "left"];
 const SIDE_NAMES = { top: "in alto", right: "a destra", bottom: "in basso", left: "a sinistra" };
@@ -22,7 +22,7 @@ function setSide(value) {
   $("compact").dataset.side = side;
   const next = SIDES[(SIDES.indexOf(side) + 1) % SIDES.length];
   const button = $("cycle-side");
-  button.title = `Sposta la barra ${SIDE_NAMES[next]}`;
+  button.title = t("Sposta la barra {side}", { side: t(SIDE_NAMES[next]) });
   const arrows = { top: "M12 19V5M6 11l6-6 6 6", right: "M5 12h14M13 6l6 6-6 6", bottom: "M12 5v14M6 13l6 6 6-6",
     left: "M19 12H5M11 6l-6 6 6 6" };
   button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${arrows[next]}"/></svg>`;
@@ -44,13 +44,13 @@ function button(icon, title, onClick, toolId) {
 function render() {
   const actions = $("actions");
   actions.append(
-    button(OPEN_ICON, "Apri un PDF", () => expand({ command: "open" })),
-    button(RECENT_ICON, "Recenti", () => expand({ command: "recent" })),
+    button(OPEN_ICON, t("Apri un PDF"), () => expand({ command: "open" })),
+    button(RECENT_ICON, t("Recenti"), () => expand({ command: "recent" })),
   );
   for (const id of QUICK) {
     const tool = tools.find((t) => t.id === id);
     if (!tool) continue;
-    const b = button(svg(tool.icon), `${tool.label}: fai clic o trascina qui i file`, () => expand({ tool: id }), id);
+    const b = button(svg(tool.icon), t("{tool}: fai clic o trascina qui i file", { tool: tool.label }), () => expand({ tool: id }), id);
     b.style.color = tool.color;
     actions.append(b);
   }
@@ -66,7 +66,7 @@ function note(text) {
 
 async function dropped(files, toolId) {
   if (!files.length) return;
-  note(files.length === 1 ? "Caricamento…" : `Caricamento di ${files.length} file…`);
+  note(files.length === 1 ? t("Caricamento…") : t("Caricamento di {n} file…", { n: files.length }));
   let infos;
   try {
     infos = await Promise.all(files.map((f) => upload(f)));
@@ -106,11 +106,12 @@ function bindDrop() {
 }
 
 async function start() {
+  await loadI18n();
   setSide(side);
   $("expand").addEventListener("click", () => expand());
   $("cycle-side").addEventListener("click", async () => {
     const next = SIDES[(SIDES.indexOf(side) + 1) % SIDES.length];
-    const result = await desktopApi()?.dock(next);
+    const result = await desktopApi()?.dock(next, screenArea());
     if (result) setSide(result);
   });
   document.addEventListener("keydown", (event) => {

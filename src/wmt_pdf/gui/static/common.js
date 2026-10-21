@@ -33,11 +33,51 @@ export const ICONS = {
 };
 export const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.info}</svg>`;
 
+// --- lingua -------------------------------------------------------------------------------------------
+// I testi sono scritti in italiano; la traduzione si cerca col testo italiano come chiave (come nella CLI).
+let messages = {};
+export const lang = () => document.documentElement.lang || "it";
+
+export function t(text, values) {
+  let out = messages[text] ?? text;
+  if (values) out = out.replace(/\{(\w+)\}/g, (match, key) => (key in values ? String(values[key]) : match));
+  return out;
+}
+
+const TRANSLATED_ATTRS = ["title", "placeholder", "aria-label"];
+
+// Traduce i testi fissi della pagina (scritti in italiano nell'HTML).
+export function translateDom(root = document.body) {
+  if (lang() === "it") return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const key = node.nodeValue.trim();
+    if (key && messages[key]) node.nodeValue = node.nodeValue.replace(key, messages[key]);
+  }
+  for (const node of root.querySelectorAll(TRANSLATED_ATTRS.map((a) => `[${a}]`).join(","))) {
+    for (const attr of TRANSLATED_ATTRS) {
+      const key = node.getAttribute(attr);
+      if (key && messages[key]) node.setAttribute(attr, messages[key]);
+    }
+  }
+}
+
+export async function loadI18n() {
+  if (lang() !== "it") {
+    try {
+      messages = await api("/api/i18n");
+    } catch {
+      messages = {}; // senza traduzioni si resta in italiano
+    }
+  }
+  translateDom();
+}
+
 export async function api(path, options = {}) {
   const headers = { "X-Wpdf-Token": TOKEN, ...(options.headers || {}) };
   const response = await fetch(path, { ...options, headers });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `errore ${response.status}`);
+  if (!response.ok) throw new Error(data.error || t("errore {status}", { status: response.status }));
   return data;
 }
 
@@ -54,7 +94,7 @@ export async function upload(file) {
 
 export async function fetchBlob(id) {
   const response = await fetch(`/api/file/${id}`, { headers: { "X-Wpdf-Token": TOKEN } });
-  if (!response.ok) throw new Error("file non disponibile");
+  if (!response.ok) throw new Error(t("file non disponibile"));
   return response.blob();
 }
 
@@ -99,6 +139,12 @@ export function accepts(accept, name) {
   return accept.some((ext) => lower.endsWith(ext));
 }
 
+// Area utile dello schermo in pixel CSS, le stesse unità di pywebview anche con lo schermo in scala.
+export const screenArea = () => ({
+  x: window.screen.availLeft ?? 0, y: window.screen.availTop ?? 0,
+  width: window.screen.availWidth, height: window.screen.availHeight,
+});
+
 // Finestra nativa (pywebview): finestre di dialogo vere per aprire e salvare.
 export const desktop = () => Boolean(window.pywebview?.api?.open_dialog);
 
@@ -108,7 +154,7 @@ export const desktop = () => Boolean(window.pywebview?.api?.open_dialog);
 export function renderOptions(form, tool, files, onChange, skip = []) {
   form.innerHTML = "";
   const shown = tool.options.filter((o) => !skip.includes(o.name));
-  if (!shown.length) form.append(el("p", { class: "muted small" }, "Nessuna opzione."));
+  if (!shown.length) form.append(el("p", { class: "muted small" }, t("Nessuna opzione.")));
   for (const opt of shown) {
     const id = `${form.id}-${opt.name}`;
     if (opt.kind === "bool") {
@@ -126,7 +172,7 @@ export function renderOptions(form, tool, files, onChange, skip = []) {
     let input;
     if (opt.kind === "choice") {
       input = el("select", { id, name: opt.name });
-      if (!opt.required && opt.default == null) input.append(el("option", { value: "" }, "Automatico"));
+      if (!opt.required && opt.default == null) input.append(el("option", { value: "" }, t("Automatico")));
       opt.choices.forEach((choice, i) => {
         const option = el("option", { value: choice });
         option.textContent = opt.labels[i] || choice;
@@ -136,8 +182,8 @@ export function renderOptions(form, tool, files, onChange, skip = []) {
     } else if (opt.kind === "file") {
       input = el("div", { class: "file-option" });
       const picker = el("input", { type: "file", id, hidden: "", accept: opt.accept.join(",") });
-      const button = el("button", { class: "btn", type: "button" }, "Scegli…");
-      const chosen = el("span", { class: "chosen" }, "nessun file");
+      const button = el("button", { class: "btn", type: "button" }, t("Scegli…"));
+      const chosen = el("span", { class: "chosen" }, t("nessun file"));
       button.addEventListener("click", () => picker.click());
       picker.addEventListener("change", async () => {
         const file = picker.files[0];
@@ -190,10 +236,10 @@ export function collectOptions(form, tool, files, skip = []) {
 export function missingOptions(tool, options, skip = []) {
   const absent = tool.options.filter((o) => !skip.includes(o.name) && o.required &&
     (options[o.name] === undefined || options[o.name] === ""));
-  if (absent.length) return `Manca: ${absent.map((o) => o.label).join(", ")}`;
+  if (absent.length) return t("Manca: {list}", { list: absent.map((o) => o.label).join(", ") });
   if (tool.one_of.length && !tool.one_of.some((name) => options[name] !== undefined && options[name] !== "")) {
     const labels = tool.options.filter((o) => tool.one_of.includes(o.name)).map((o) => o.label.toLowerCase());
-    return `Indica ${labels.join(" oppure ")}`;
+    return t("Indica {list}", { list: labels.join(t(" oppure ")) });
   }
   return "";
 }

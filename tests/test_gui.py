@@ -36,7 +36,8 @@ def call(srv, method, path, body=None, headers=None, token=True):
         with urllib.request.urlopen(req) as resp:
             return resp.status, resp.read(), resp.headers
     except urllib.error.HTTPError as exc:
-        return exc.code, exc.read(), exc.headers
+        with exc:  # chiusa subito: altrimenti un ResourceWarning nel garbage collector disturba altri test
+            return exc.code, exc.read(), exc.headers
 
 
 def upload(srv, path):
