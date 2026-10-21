@@ -40,6 +40,19 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 13h7v7h-7z"/><path d="M15 4h5v5M9 20H4v-5"/></svg>
             <span>Unisci</span>
           </button>
+          <div class="menu-wrap" id="compact-wrap" hidden>
+            <button class="bar-btn" id="cmd-compact" type="button" aria-haspopup="menu" aria-expanded="false"
+                    title="Barra compatta sempre in primo piano, su un lato dello schermo">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+              <span>Compatta</span>
+            </button>
+            <div class="menu" id="compact-menu" role="menu" hidden>
+              <button type="button" role="menuitem" data-side="top"><span>In alto</span></button>
+              <button type="button" role="menuitem" data-side="bottom"><span>In basso</span></button>
+              <button type="button" role="menuitem" data-side="left"><span>A sinistra</span></button>
+              <button type="button" role="menuitem" data-side="right"><span>A destra</span></button>
+            </div>
+          </div>
         </div>
         <div class="doc-tab" id="doc-tab" hidden>
           <button class="doc-tab-name" id="doc-name" type="button" title="Torna al documento"></button>

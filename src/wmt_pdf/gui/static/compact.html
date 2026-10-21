@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="wpdf-token" content="__TOKEN__">
+  <title>wmt-pdf</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/compact.css">
+  <script type="module" src="/static/compact.js"></script>
+</head>
+<body class="compact-body">
+  <div class="compact" id="compact" data-side="top">
+    <div class="grip pywebview-drag-region" title="Trascina per spostare la barra" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="1"/><circle cx="15" cy="7" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="17" r="1"/><circle cx="15" cy="17" r="1"/></svg>
+    </div>
+    <div class="actions" id="actions" role="toolbar" aria-label="Comandi rapidi"></div>
+    <div class="side-tools">
+      <button class="cbtn" id="cycle-side" type="button"></button>
+      <button class="cbtn accent" id="expand" type="button" title="Torna alla finestra completa">
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+    </div>
+    <p class="drop-note" id="drop-note" hidden></p>
+  </div>
+</body>
+</html>

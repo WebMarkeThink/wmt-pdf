@@ -131,7 +131,48 @@ async function toggleRecentMenu() {
 function closeMenu() {
   $("recent-menu").hidden = true;
   $("cmd-recent").setAttribute("aria-expanded", "false");
+  $("compact-menu").hidden = true;
+  $("cmd-compact").setAttribute("aria-expanded", "false");
 }
+
+// --- barra compatta (solo nella finestra di wmt-pdf) ----------------------------------------------------
+
+function bindCompact() {
+  const refresh = () => { $("compact-wrap").hidden = !window.pywebview?.api?.compact; };
+  refresh();
+  window.addEventListener("pywebviewready", refresh);
+  $("cmd-compact").addEventListener("click", () => {
+    const menu = $("compact-menu");
+    const opening = menu.hidden;
+    closeMenu();
+    menu.hidden = !opening;
+    $("cmd-compact").setAttribute("aria-expanded", String(opening));
+  });
+  $("compact-menu").querySelectorAll("[data-side]").forEach((item) => item.addEventListener("click", () => {
+    closeMenu();
+    window.pywebview?.api?.compact(item.dataset.side);
+  }));
+}
+
+// Comandi che arrivano dalla barra compatta quando si torna alla finestra completa.
+window.wpdfExternal = async (action) => {
+  if (action.command === "open") return openCommand();
+  if (action.command === "recent") {
+    if (state.view === "tool") show("home");
+    return toggleRecentMenu();
+  }
+  if (action.open_file) return openDocument({ file_id: action.open_file });
+  const tool = state.tools.find((t) => t.id === action.tool);
+  if (!tool) return undefined;
+  openTool(tool);
+  for (const info of action.files || []) {
+    if (state.files.length >= tool.max_files) break;
+    if (accepts(tool.accept, info.name)) state.files.push(info);
+    else toast(`${info.name}: formato non adatto a ${tool.label}`);
+  }
+  renderFiles();
+  return undefined;
+};
 
 // --- schermata iniziale --------------------------------------------------------------------------
 
@@ -478,6 +519,7 @@ async function start() {
   $("back").addEventListener("click", () => show("home"));
   $("run").addEventListener("click", run);
   bindCommands();
+  bindCompact();
   bindDrop();
   bindViewer();
   show("home");

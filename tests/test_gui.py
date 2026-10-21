@@ -323,7 +323,7 @@ def test_desktop_api_exposes_only_methods(server):
     api = DesktopApi(server)
     api.attach_window(FakeWindow())
     public = [name for name in dir(api) if not name.startswith("_")]
-    assert public == ["attach_window", "open_dialog", "save_dialog"]
+    assert public == ["attach_window", "compact", "dock", "expand", "open_dialog", "save_dialog"]
     assert all(inspect.ismethod(getattr(api, name)) for name in public)
 
 

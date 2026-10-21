@@ -1,0 +1,82 @@
+"""Barra compatta: una finestretta sempre in primo piano, agganciata a uno dei quattro lati dello schermo.
+
+La finestra principale si nasconde; la barra ha i comandi più usati e accetta file trascinati. «Espandi» (o la
+chiusura della barra) riporta la finestra principale, eventualmente con un comando da eseguire (aprire un file,
+uno strumento, i recenti).
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+SIDES = ("top", "right", "bottom", "left")
+HORIZONTAL = (600, 56)  # larghezza, altezza in alto e in basso
+VERTICAL = (64, 600)  # a sinistra e a destra
+
+
+def size_for(side: str) -> tuple[int, int]:
+    return HORIZONTAL if side in ("top", "bottom") else VERTICAL
+
+
+def work_area(screen: Any) -> tuple[int, int, int, int]:
+    """Area utile dello schermo (senza barra delle applicazioni) se il sistema la dà, altrimenti lo schermo intero."""
+    frame: Any = getattr(screen, "frame", None)
+    try:
+        return int(frame.X), int(frame.Y), int(frame.Width), int(frame.Height)  # Windows: Screen.WorkingArea
+    except (AttributeError, TypeError, ValueError):
+        return int(screen.x), int(screen.y), int(screen.width), int(screen.height)
+
+
+def geometry(side: str, area: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    """Posizione e dimensioni della barra: centrata sul lato scelto, mai più grande dell'area utile."""
+    ax, ay, aw, ah = area
+    width, height = size_for(side)
+    width, height = min(width, aw), min(height, ah)
+    if side in ("top", "bottom"):
+        x = ax + (aw - width) // 2
+        y = ay if side == "top" else ay + ah - height
+    else:
+        y = ay + (ah - height) // 2
+        x = ax if side == "left" else ax + aw - width
+    return x, y, width, height
+
+
+def screen_of(window: Any, screens: list) -> Any:
+    """Lo schermo dove sta la finestra (il centro), altrimenti il primo."""
+    try:
+        cx, cy = window.x + window.width // 2, window.y + window.height // 2
+    except (AttributeError, TypeError):
+        return screens[0]
+    for screen in screens:
+        if screen.x <= cx < screen.x + screen.width and screen.y <= cy < screen.y + screen.height:
+            return screen
+    return screens[0]
+
+
+# Azioni che la barra può chiedere alla finestra principale: solo queste, solo valori semplici.
+COMMANDS = ("open", "recent")
+
+
+def clean_action(action: Any, tool_ids: set[str]) -> dict | None:
+    if not isinstance(action, dict):
+        return None
+    result: dict[str, Any] = {}
+    if action.get("command") in COMMANDS:
+        result["command"] = action["command"]
+    if isinstance(action.get("tool"), str) and action["tool"] in tool_ids:
+        result["tool"] = action["tool"]
+    if isinstance(action.get("open_file"), str) and action["open_file"].isalnum():
+        result["open_file"] = action["open_file"]
+    files = action.get("files")
+    if isinstance(files, list):
+        result["files"] = [
+            {"id": str(f["id"]), "name": str(f.get("name", "")), "size": int(f.get("size") or 0),
+             "kind": str(f.get("kind", ""))}
+            for f in files[:50] if isinstance(f, dict) and str(f.get("id", "")).isalnum()
+        ]
+    return result or None
+
+
+def run_action_js(action: dict) -> str:
+    return f"window.wpdfExternal && window.wpdfExternal({json.dumps(action)})"

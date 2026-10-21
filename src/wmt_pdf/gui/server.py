@@ -189,8 +189,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self._local_host():
             return self._error(403, "host non ammesso")
         path = urlparse(self.path).path
-        if path in ("/", "/index.html"):
-            html = (STATIC / "index.html").read_text(encoding="utf-8").replace("__TOKEN__", self.server.token)
+        if path in ("/", "/index.html", "/compact"):
+            page = "compact.html" if path == "/compact" else "index.html"
+            html = (STATIC / page).read_text(encoding="utf-8").replace("__TOKEN__", self.server.token)
             return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
         if path.startswith("/static/"):
             return self._static(unquote(path[len("/static/"):]))
@@ -408,6 +409,8 @@ class DesktopApi:
     # pubblici di js_api, e la finestra ha migliaia di oggetti nativi: la pagina restava bloccata.
     _window: Any = None  # finestra di pywebview, assegnata dopo create_window
 
+    _compact: Any = None  # barra compatta, quando c'è
+
     def __init__(self, server: GuiServer):
         self._server = server
 
@@ -441,6 +444,58 @@ class DesktopApi:
             path += ".pdf"
         self._server.documents.allow(path)
         return path
+
+    # --- barra compatta ---
+
+    def compact(self, side: str = "top") -> str:
+        """Nasconde la finestra principale e mostra la barra compatta sul lato scelto (top, right, bottom, left)."""
+        import webview
+
+        from wmt_pdf.gui.compact import SIDES, geometry, screen_of, work_area
+
+        side = side if side in SIDES else "top"
+        if self._compact is not None:
+            self.dock(side)
+        else:
+            x, y, width, height = geometry(side, work_area(screen_of(self._window, webview.screens)))
+            port = self._server.server_address[1]
+            self._compact = webview.create_window(
+                "wmt-pdf", f"http://127.0.0.1:{port}/compact?side={side}", js_api=self, x=x, y=y, width=width,
+                height=height, frameless=True, easy_drag=False, on_top=True, resizable=False, background_color="#161b26")
+            self._compact.events.closed += self._compact_closed
+        self._window.hide()
+        return side
+
+    def dock(self, side: str) -> str:
+        """Sposta la barra compatta su un altro lato dello schermo in cui si trova."""
+        import webview
+
+        from wmt_pdf.gui.compact import SIDES, geometry, screen_of, work_area
+
+        if self._compact is None or side not in SIDES:
+            return ""
+        x, y, width, height = geometry(side, work_area(screen_of(self._compact, webview.screens)))
+        self._compact.resize(width, height)
+        self._compact.move(x, y)
+        return side
+
+    def expand(self, action=None) -> None:
+        """Torna alla finestra completa; con un'azione (aprire un file, uno strumento, i recenti) la esegue lì."""
+        from wmt_pdf.gui.compact import clean_action, run_action_js
+
+        compact, self._compact = self._compact, None
+        self._window.show()
+        if compact is not None:
+            compact.destroy()
+        cleaned = clean_action(action, set(TOOLS))
+        if cleaned:
+            self._window.evaluate_js(run_action_js(cleaned))
+
+    def _compact_closed(self) -> None:
+        # Chiusa con Alt+F4 o simili: la finestra principale non deve restare nascosta per sempre.
+        if self._compact is not None:
+            self._compact = None
+            self._window.show()
 
     def _confirm_close(self):
         """Alla chiusura della finestra, conferma se ci sono modifiche non salvate (False annulla la chiusura)."""

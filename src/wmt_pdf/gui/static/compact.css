@@ -1,0 +1,32 @@
+/* Barra compatta: sempre in primo piano, orizzontale in alto e in basso, verticale ai lati. */
+html, body.compact-body { height: 100%; overflow: hidden; }
+body.compact-body { background: var(--surface); user-select: none; -webkit-user-select: none; }
+
+.compact {
+  height: 100%; display: flex; align-items: center; gap: 4px; padding: 6px 8px;
+  border: 1px solid var(--border); position: relative;
+}
+.compact[data-side="left"], .compact[data-side="right"] { flex-direction: column; padding: 8px 6px; }
+
+.grip { display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: grab; padding: 4px; }
+.grip svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+
+.actions, .side-tools { display: flex; align-items: center; gap: 4px; }
+.actions { flex: 1; }
+.compact[data-side="left"] .actions, .compact[data-side="right"] .actions,
+.compact[data-side="left"] .side-tools, .compact[data-side="right"] .side-tools { flex-direction: column; }
+
+.cbtn {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 0;
+  border-radius: 10px; background: none; color: var(--text); cursor: pointer; position: relative;
+}
+.cbtn:hover, .cbtn.over { background: var(--surface-2); }
+.cbtn.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.cbtn.accent { color: var(--accent); }
+.cbtn .dot { position: absolute; inset: auto 6px 6px auto; width: 7px; height: 7px; border-radius: 50%; }
+
+.compact.over { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.drop-note {
+  position: absolute; inset: 0; margin: 0; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); font-size: 13px; text-align: center; padding: 4px;
+}
