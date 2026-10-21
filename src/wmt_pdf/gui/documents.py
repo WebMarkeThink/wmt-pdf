@@ -24,6 +24,7 @@ class Document:
     versions: list[str] = field(default_factory=list)  # id dei file nella cartella di lavoro
     index: int = 0
     saved_index: int = 0
+    origin: str | None = None  # file caricato da cui è stato aperto: non è del documento, resta alla chiusura
 
 
 def _recent_path() -> Path:
@@ -101,7 +102,7 @@ class DocumentStore:
 
     def open_file(self, file_id: str) -> Document:
         path = self.server.resolve(file_id)
-        doc = Document(uuid.uuid4().hex, path.name, None, [file_id])
+        doc = Document(uuid.uuid4().hex, path.name, None, [file_id], origin=file_id)
         self.docs[doc.id] = doc
         return doc
 
@@ -124,6 +125,13 @@ class DocumentStore:
         self.docs[doc.id] = doc
         remember(path)
         return doc
+
+    def close(self, doc: Document) -> None:
+        """Chiude il documento: le sue versioni nella cartella di lavoro non servono più."""
+        self.docs.pop(doc.id, None)
+        for file_id in doc.versions:
+            if file_id != doc.origin:
+                self.server.discard(file_id)
 
     def current(self, doc: Document) -> Path:
         return self.server.resolve(doc.versions[doc.index])

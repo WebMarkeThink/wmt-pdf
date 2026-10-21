@@ -36,10 +36,17 @@
             </button>
             <div class="menu" id="recent-menu" role="menu" hidden></div>
           </div>
+          <button class="bar-btn" id="cmd-merge" type="button" title="Unisci più file in un unico PDF">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 13h7v7h-7z"/><path d="M15 4h5v5M9 20H4v-5"/></svg>
+            <span>Unisci</span>
+          </button>
         </div>
         <div class="doc-tab" id="doc-tab" hidden>
           <button class="doc-tab-name" id="doc-name" type="button" title="Torna al documento"></button>
           <span class="doc-dirty" id="doc-dirty" title="Modifiche non salvate" hidden>●</span>
+          <button class="doc-close" id="doc-close" type="button" title="Chiudi il documento (Ctrl+W)" aria-label="Chiudi il documento">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
         </div>
         <div class="appbar-group right">
           <button class="bar-btn icon-only" id="cmd-undo" type="button" title="Annulla (Ctrl+Z)" disabled>
@@ -162,6 +169,11 @@
               <button class="btn" id="page-rotate" type="button">Ruota</button>
               <button class="btn" id="page-delete" type="button">Elimina</button>
             </div>
+            <h3>Unisci</h3>
+            <div class="tool-row">
+              <button class="btn" id="doc-merge" type="button" title="PDF, Word, Excel, immagini, email…">Aggiungi file…</button>
+            </div>
+            <input id="merge-input" type="file" multiple hidden>
             <h3>Testo</h3>
             <form class="mini-form" id="find-form">
               <input id="find-text" type="text" placeholder="Cerca" required>
@@ -196,6 +208,31 @@
       <button class="btn ghost" id="pop-cancel" type="button">Annulla</button>
     </div>
   </div>
+
+  <dialog id="close-dialog" class="tool-dialog" aria-labelledby="cd-title">
+    <h2 id="cd-title">Chiudere il documento?</h2>
+    <p id="cd-desc" class="muted"></p>
+    <div class="tool-row end">
+      <button class="btn ghost" type="button" data-choice="cancel">Annulla</button>
+      <button class="btn" type="button" data-choice="discard">Non salvare</button>
+      <button class="btn primary small-btn" type="button" data-choice="save">Salva</button>
+    </div>
+  </dialog>
+
+  <dialog id="merge-dialog" class="tool-dialog" aria-labelledby="md-title">
+    <h2 id="md-title">Unisci al documento</h2>
+    <p class="muted">I file vengono convertiti in PDF se serve e uniti nell'ordine dell'elenco.</p>
+    <ol id="md-files" class="md-files"></ol>
+    <fieldset class="md-position">
+      <legend>Dove</legend>
+      <label class="check"><input type="radio" name="md-position" value="end" checked>In fondo al documento</label>
+      <label class="check"><input type="radio" name="md-position" value="start">All'inizio del documento</label>
+    </fieldset>
+    <div class="tool-row end">
+      <button class="btn ghost" id="md-cancel" type="button">Annulla</button>
+      <button class="btn primary small-btn" id="md-run" type="button">Unisci</button>
+    </div>
+  </dialog>
 
   <dialog id="tool-dialog" class="tool-dialog" aria-labelledby="td-title">
     <h2 id="td-title"></h2>

@@ -28,15 +28,17 @@ Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert,
 uv run wpdf gui
 ```
 
-Due modi di lavorare, con la barra in alto sempre disponibile (Apri, Recenti, Annulla, Ripeti, Salva,
-Salva con nome, Scarica):
+Due modi di lavorare, con la barra in alto sempre disponibile (Apri, Recenti, Unisci, Annulla, Ripeti, Salva,
+Salva con nome, Scarica). Il documento aperto si chiude con la × accanto al nome o con Ctrl+W: se ci sono
+modifiche non salvate si sceglie tra Salva, Non salvare e Annulla.
 
 - **Documento**: si apre un PDF (Apri, trascinandolo nella finestra, o dai recenti) e lo si modifica direttamente.
   Con «Seleziona» (il puntatore) si vedono contornati gli oggetti della pagina (testo, immagini, firme grafiche,
   timbri, filigrane, evidenziazioni, note, campi dei moduli): clic per selezionarne uno, trascinamento per
   spostarlo, frecce per spostarlo di un punto (Maiusc: dieci), doppio clic su un testo per cambiarlo, Esc per
   deselezionare. Con «Modifica testo» il clic su un testo lo cambia o lo elimina; con «Aggiungi testo» si scrive
-  nel punto scelto. Poi: ruota o elimina la pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti
+  nel punto scelto. «Aggiungi file…» unisce al documento altri file (PDF, Word, Excel, immagini, email), all'inizio
+  o in fondo. Poi: ruota o elimina la pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti
   applicati al documento aperto. Ogni modifica è una versione: si annulla e si ripete. Miniature delle pagine a
   sinistra.
 - **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,

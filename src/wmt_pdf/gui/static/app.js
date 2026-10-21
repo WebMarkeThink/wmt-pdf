@@ -4,8 +4,8 @@ import {
   toast, upload,
 } from "./common.js";
 import {
-  PDF_OPTIONS, clearSelection, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav, pdfjs, redo, save,
-  saveAs, undo,
+  PDF_OPTIONS, clearSelection, closeDocument, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav,
+  pdfjs, redo, save, saveAs, undo,
 } from "./doc.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -383,6 +383,11 @@ function bindCommands() {
   $("cmd-saveas").addEventListener("click", saveAs);
   $("cmd-download").addEventListener("click", download);
   $("doc-name").addEventListener("click", () => show("doc"));
+  $("doc-close").addEventListener("click", closeDocument);
+  $("cmd-merge").addEventListener("click", () => {
+    const merge = state.tools.find((t) => t.id === "merge");
+    if (merge) openTool(merge);
+  });
   $("brand").addEventListener("click", () => {
     state.category = "tutti";
     show("home");
@@ -407,6 +412,9 @@ function bindCommands() {
       event.preventDefault();
       if (event.shiftKey) saveAs();
       else save();
+    } else if (mod && key === "w" && currentDoc()) {
+      event.preventDefault();
+      closeDocument();
     } else if (mod && !typing && key === "z") {
       event.preventDefault();
       if (event.shiftKey) redo();

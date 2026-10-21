@@ -335,13 +335,24 @@ class Handler(BaseHTTPRequestHandler):
         doc_id, _, action = path[len("/api/doc/"):].partition("/")
         doc = store.get(doc_id)
         if action == "apply":
-            result = self.server.execute(request.get("tool"), [doc.versions[doc.index]], request.get("options") or {})
+            inputs = [doc.versions[doc.index]]
+            extra, position = request.get("files"), request.get("position", "end")
+            if extra is not None:  # «Unisci»: altri file prima o dopo il documento aperto
+                if request.get("tool") != "merge" or not isinstance(extra, list) or position not in ("start", "end"):
+                    raise ValueError("file aggiunti ammessi solo per «Unisci», all'inizio o in fondo")
+                for file_id in extra:
+                    self.server.resolve(file_id)
+                inputs = extra + inputs if position == "start" else inputs + extra
+            result = self.server.execute(request.get("tool"), inputs, request.get("options") or {})
             pdfs = [o for o in result["outputs"] if o["kind"] == "pdf"]
             if result["code"] == 0 and len(pdfs) == 1:
                 store.push(doc, pdfs[0]["id"])  # una modifica del documento: diventa la nuova versione
                 result["outputs"] = []
             result["document"] = store.state(doc)
             return self._json(200, result)
+        if action == "close":
+            store.close(doc)
+            return self._json(200, {"closed": True})
         if action == "undo":
             store.undo(doc)
         elif action == "redo":

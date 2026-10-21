@@ -325,3 +325,41 @@ def test_desktop_api_exposes_only_methods(server):
     public = [name for name in dir(api) if not name.startswith("_")]
     assert public == ["attach_window", "open_dialog", "save_dialog"]
     assert all(inspect.ismethod(getattr(api, name)) for name in public)
+
+
+def test_document_merge_with_other_files(server, text_pdf, table_pdf, cache):
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    other = upload(server, table_pdf)
+    _, result = post(server, f"/api/doc/{doc['id']}/apply",
+                     {"tool": "merge", "options": {"bookmarks": False}, "files": [other], "position": "end"})
+    assert result["code"] == 0, result
+    merged = result["document"]
+    assert merged["pages"] > doc["pages"] and merged["version"] == 2 and merged["name"] == doc["name"]
+    _, result = post(server, f"/api/doc/{doc['id']}/apply",
+                     {"tool": "merge", "options": {}, "files": [other], "position": "start"})
+    assert result["code"] == 0 and result["document"]["pages"] > merged["pages"]
+
+
+@pytest.mark.parametrize("body", [
+    {"tool": "rotate", "options": {"angle": "90"}, "files": ["x"]},  # file in più solo per «Unisci»
+    {"tool": "merge", "options": {}, "files": "non una lista"},
+    {"tool": "merge", "options": {}, "files": ["0" * 32]},
+    {"tool": "merge", "options": {}, "files": [], "position": "in mezzo"},
+])
+def test_document_merge_bad_requests(server, text_pdf, cache, body):
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    status, _ = post(server, f"/api/doc/{doc['id']}/apply", body)
+    assert status == 400
+
+
+def test_document_close(server, text_pdf, cache):
+    file_id = upload(server, text_pdf)
+    _, doc = post(server, "/api/doc/open", {"file_id": file_id})
+    _, result = post(server, f"/api/doc/{doc['id']}/apply", {"tool": "rotate", "options": {"angle": "90"}})
+    edited = result["document"]["file_id"]
+    status, body = post(server, f"/api/doc/{doc['id']}/close", {})
+    assert status == 200 and body == {"closed": True}
+    status, _ = post(server, f"/api/doc/{doc['id']}/undo", {})
+    assert status == 400  # il documento non c'è più
+    assert call(server, "GET", f"/api/file/{edited}")[0] != 200  # versioni intermedie tolte
+    assert call(server, "GET", f"/api/file/{file_id}")[0] == 200  # il file caricato resta (es. «Apri» dai risultati)

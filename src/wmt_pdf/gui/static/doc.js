@@ -1,7 +1,7 @@
 // Vista documento: pagina con testo modificabile, miniature, strumenti, versioni e salvataggio.
 import * as pdfjs from "/static/vendor/pdf.min.mjs";
 import {
-  $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, toast,
+  $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, toast, upload,
 } from "./common.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.min.mjs";
@@ -38,6 +38,16 @@ export function initDocs(context) {
   $("overlay").addEventListener("click", onOverlayClick);
   $("page-rotate").addEventListener("click", () => apply("rotate", { angle: "90", pages: String(doc.page) }));
   $("page-delete").addEventListener("click", deletePage);
+  const merge = ctx.tools().find((t) => t.id === "merge");
+  if (merge && !merge.accept.includes("*")) $("merge-input").accept = merge.accept.join(",");
+  $("doc-merge").addEventListener("click", () => $("merge-input").click());
+  $("merge-input").addEventListener("change", () => {
+    const files = [...$("merge-input").files];
+    $("merge-input").value = "";
+    if (files.length) chooseMergePosition(files);
+  });
+  $("md-cancel").addEventListener("click", () => $("merge-dialog").close());
+  $("md-run").addEventListener("click", runMerge);
   $("find-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const find = $("find-text").value;
@@ -435,12 +445,12 @@ function message(text, isError = false) {
   box.classList.toggle("error", isError);
 }
 
-export async function apply(tool, options) {
+export async function apply(tool, options, extra = {}) {
   if (!doc.state || doc.busy) return;
   doc.busy = true;
   message("Elaborazione…");
   try {
-    const result = await post(`/api/doc/${doc.state.id}/apply`, { tool, options });
+    const result = await post(`/api/doc/${doc.state.id}/apply`, { tool, options, ...extra });
     // Nel documento il nome del file intermedio non interessa: resta solo cosa è successo.
     const text = `${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}`
       .replace(/^wpdf: /gm, "").replace(/^[^\n:]+\.pdf: /gm, "").trim();
@@ -498,38 +508,127 @@ export async function redo() {
   if (doc.state?.can_redo) await step("redo");
 }
 
+// Vero se il documento è stato salvato (o, nel browser, scaricato).
 export async function save() {
-  if (!doc.state) return;
+  if (!doc.state) return false;
   const pdfPath = doc.state.path && doc.state.path.toLowerCase().endsWith(".pdf");
   if (desktop() && pdfPath) { // un .p7m non si riscrive: la firma andrebbe persa
     try {
       doc.state = await post(`/api/doc/${doc.state.id}/save`);
       ctx.updateBar();
       toast(`Salvato in ${doc.state.path}`);
+      return true;
     } catch (error) {
       toast(error.message);
+      return false;
     }
-    return;
   }
-  await saveAs();
+  return saveAs();
 }
 
 export async function saveAs() {
-  if (!doc.state) return;
+  if (!doc.state) return false;
   if (!desktop()) {
-    await downloadFile(doc.state.file_id, doc.state.name);
+    try {
+      await downloadFile(doc.state.file_id, doc.state.name);
+    } catch (error) {
+      toast(error.message);
+      return false;
+    }
     toast("Nel browser «Salva» scarica il file: per salvare direttamente sul disco usa la finestra di wmt-pdf");
-    return;
+    return true;
   }
   const path = await window.pywebview.api.save_dialog(doc.state.name);
-  if (!path) return;
+  if (!path) return false;
   try {
     doc.state = await post(`/api/doc/${doc.state.id}/save`, { path });
     ctx.updateBar();
     toast(`Salvato in ${doc.state.path}`);
+    return true;
   } catch (error) {
     toast(error.message);
+    return false;
   }
+}
+
+// --- chiusura --------------------------------------------------------------------------------------
+
+function askClose() {
+  const dialog = $("close-dialog");
+  $("cd-desc").textContent = `«${doc.state.name}» ha modifiche non salvate.`;
+  return new Promise((resolve) => {
+    const done = (choice) => {
+      dialog.removeEventListener("cancel", onCancel);
+      dialog.querySelectorAll("[data-choice]").forEach((b) => { b.onclick = null; });
+      dialog.close();
+      resolve(choice);
+    };
+    const onCancel = (event) => {
+      event.preventDefault();
+      done("cancel");
+    };
+    dialog.addEventListener("cancel", onCancel); // Esc
+    dialog.querySelectorAll("[data-choice]").forEach((b) => { b.onclick = () => done(b.dataset.choice); });
+    dialog.showModal();
+    dialog.querySelector('[data-choice="save"]').focus();
+  });
+}
+
+// Chiude il documento aperto; con modifiche non salvate chiede prima. Vero se è stato chiuso.
+export async function closeDocument() {
+  if (!doc.state || doc.busy) return false;
+  if (doc.state.modified) {
+    const choice = await askClose();
+    if (choice === "cancel" || (choice === "save" && !(await save()))) return false;
+  }
+  const closing = doc.state;
+  try {
+    await post(`/api/doc/${closing.id}/close`);
+  } catch {
+    // già sparito dal server (es. riavviato): si chiude comunque la vista
+  }
+  closePopover();
+  if (doc.task) doc.task.cancel();
+  if (doc.loading) await doc.loading.destroy().catch(() => {});
+  Object.assign(doc, { state: null, pdf: null, loading: null, viewport: null, page: 1, selected: null, reselect: null });
+  doc.thumbsRun++; // ferma le miniature ancora in corso
+  $("thumbs").innerHTML = "";
+  $("overlay").innerHTML = "";
+  message("");
+  ctx.show("home");
+  return true;
+}
+
+// --- unione con altri file -------------------------------------------------------------------------
+
+let mergeFiles = [];
+
+function chooseMergePosition(files) {
+  mergeFiles = files;
+  const list = $("md-files");
+  list.innerHTML = "";
+  for (const file of files) {
+    const item = el("li");
+    item.textContent = file.name;
+    list.append(item);
+  }
+  $("merge-dialog").showModal();
+}
+
+async function runMerge() {
+  const position = document.querySelector('input[name="md-position"]:checked').value;
+  $("merge-dialog").close();
+  const files = mergeFiles;
+  mergeFiles = [];
+  message(`Caricamento di ${files.length} file…`);
+  let ids;
+  try {
+    ids = (await Promise.all(files.map((f) => upload(f)))).map((info) => info.id);
+  } catch (error) {
+    message(error.message, true);
+    return;
+  }
+  await apply("merge", { bookmarks: false }, { files: ids, position });
 }
 
 export async function download() {
