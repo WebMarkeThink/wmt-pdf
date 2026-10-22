@@ -142,6 +142,20 @@ def _safe_name(name: str) -> str:
     return base[:150] or "file"
 
 
+def update_status() -> dict:
+    """Per l'interfaccia: c'è una versione nuova? Rispetta l'impostazione e WPDF_NO_UPDATE_CHECK."""
+    from dataclasses import asdict
+
+    from wmt_pdf.updates import check, disabled_by_env
+
+    if disabled_by_env() or not settings()["update_check"]:
+        return {"enabled": False}
+    try:
+        return {"enabled": True} | asdict(check())
+    except Exception:  # noqa: BLE001 - rete assente o risposta strana: nessun avviso, nessun errore all'utente
+        return {"enabled": True, "available": False}
+
+
 def make_server(workdir: Path, port: int = 0) -> GuiServer:
     workdir.mkdir(parents=True, exist_ok=True)
     server = GuiServer(("127.0.0.1", port), workdir)
@@ -216,6 +230,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"desktop": self.server.desktop, "files": recent() if self.server.desktop else []})
         if path == "/api/settings":
             return self._json(200, settings())
+        if path == "/api/update":
+            return self._json(200, update_status())
         if path == "/api/i18n":
             from wmt_pdf.i18n import catalog as messages
 
@@ -431,8 +447,8 @@ class DesktopApi:
     _window: Any = None  # finestra di pywebview, assegnata dopo create_window
 
     _compact: Any = None  # barra compatta, quando c'è
-    _compact_lock = threading.Lock()  # un doppio clic su «Compatta» non deve aprire due barre
-    _compact_place: tuple[int, int, int, int] | None = None  # dove mettere la barra appena caricata
+    _compact_lock = threading.RLock()  # un doppio clic su «Compatta» non deve aprire due barre
+    _compact_place: tuple[Any, tuple[int, int, int, int]] | None = None  # (barra, misure) prima che compaia
 
     def __init__(self, server: GuiServer):
         self._server = server
@@ -454,6 +470,16 @@ class DesktopApi:
         path = str(result[0])
         self._server.documents.allow(path)
         return path
+
+    def open_url(self, url: str) -> bool:
+        """Apre nel browser la pagina di una release (solo quelle di wmt-pdf)."""
+        import webbrowser
+
+        from wmt_pdf.updates import is_release_url
+
+        if not is_release_url(url):
+            return False
+        return webbrowser.open(url)
 
     def save_dialog(self, name: str):
         import webview
@@ -495,14 +521,15 @@ class DesktopApi:
                 # Su Windows pywebview dà la dimensione prima di togliere il bordo: si applica il minimo di una
                 # finestra con barra del titolo (larga 120 px invece di 56) e poi l'altezza cala. La barra nasce
                 # nascosta e prende misura e posto giuste a pagina caricata, poi si mostra.
-                self._compact_place = (x, y, width, height)
-                self._compact = webview.create_window(
+                bar = webview.create_window(
                     "wmt-pdf", f"http://127.0.0.1:{port}/compact?side={side}", js_api=self, x=x, y=y, width=width,
                     height=height, min_size=MIN_SIZE, hidden=True, frameless=True, easy_drag=False, on_top=True,
                     resizable=False, background_color="#161b26")
-                self._compact.events.closed += self._compact_closed
-                self._compact.events.loaded += self._place_compact
-                timer = threading.Timer(5, self._place_compact)  # pagina mai caricata: la barra si mostra lo stesso
+                self._compact, self._compact_place = bar, (bar, (x, y, width, height))
+                bar.events.closed += self._compact_closed
+                # Legati a questa barra: un timer rimasto da una barra già chiusa non tocca quella nuova.
+                bar.events.loaded += lambda: self._place_compact(bar)
+                timer = threading.Timer(5, self._place_compact, args=(bar,))  # pagina mai caricata: si mostra lo stesso
                 timer.daemon = True
                 timer.start()
         self._window.hide()
@@ -512,11 +539,17 @@ class DesktopApi:
         """Sposta la barra compatta su un altro lato dello schermo in cui si trova."""
         from wmt_pdf.gui.compact import SIDES, geometry
 
-        if self._compact is None or side not in SIDES:
-            return ""
-        x, y, width, height = geometry(side, self._area(area, self._compact))
-        self._compact.resize(width, height)
-        self._compact.move(x, y)
+        with self._compact_lock:
+            bar = self._compact
+            if bar is None or side not in SIDES:
+                return ""
+            place = geometry(side, self._area(area, bar))
+            if self._compact_place is not None and self._compact_place[0] is bar:
+                self._compact_place = (bar, place)  # non ancora comparsa: comparirà già sul lato nuovo
+                return side
+        x, y, width, height = place
+        bar.resize(width, height)
+        bar.move(x, y)
         return side
 
     def expand(self, action=None) -> None:
@@ -524,28 +557,32 @@ class DesktopApi:
         from wmt_pdf.gui.compact import clean_action, run_action_js
 
         cleaned = clean_action(action, set(TOOLS))  # prima di tutto: un'azione malformata non lascia nulla a metà
-        compact, self._compact = self._compact, None
+        with self._compact_lock:
+            compact, self._compact, self._compact_place = self._compact, None, None
         self._window.show()
         if compact is not None:
             compact.destroy()
         if cleaned:
             self._window.evaluate_js(run_action_js(cleaned))
 
-    def _place_compact(self) -> None:
+    def _place_compact(self, bar) -> None:
         """Prima comparsa della barra, con le misure giuste (vedi compact); le volte dopo non fa nulla."""
         with self._compact_lock:
-            bar, place, self._compact_place = self._compact, self._compact_place, None
-        if bar is None or place is None:
-            return
-        x, y, width, height = place
-        bar.resize(width, height)
-        bar.move(x, y)
-        bar.show()
+            pending = self._compact_place
+            if pending is None or pending[0] is not bar or self._compact is not bar:
+                return  # già comparsa, oppure barra chiusa nel frattempo
+            self._compact_place = None
+        x, y, width, height = pending[1]
+        with contextlib.suppress(Exception):  # barra chiusa proprio adesso: niente da mostrare
+            bar.resize(width, height)
+            bar.move(x, y)
+            bar.show()
 
     def _compact_closed(self) -> None:
         # Chiusa con Alt+F4 o simili: la finestra principale non deve restare nascosta per sempre.
-        if self._compact is not None:
-            self._compact = None
+        with self._compact_lock:
+            was_open, self._compact, self._compact_place = self._compact is not None, None, None
+        if was_open:
             self._window.show()
 
     def _confirm_close(self):

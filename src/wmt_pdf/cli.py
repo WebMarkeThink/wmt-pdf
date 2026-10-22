@@ -142,7 +142,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=0, help=t("porta locale (di default una libera)"))
     p.add_argument("--no-window", action="store_true", help=t("non aprire finestra né browser (solo server)"))
     p.set_defaults(func=cmd_gui)
+
+    p = sub.add_parser("update", help=t("Controlla se c'è una versione nuova di wmt-pdf"),
+                       description=t("Controlla se c'è una versione nuova di wmt-pdf (chiede a GitHub l'elenco delle release)"))
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_update)
     return parser
+
+
+def cmd_update(args) -> int:
+    from dataclasses import asdict
+
+    from wmt_pdf.updates import check
+
+    info = check(use_cache=False)  # chiesto esplicitamente: sempre una risposta fresca
+    if args.json:
+        print(json.dumps(asdict(info), ensure_ascii=False, indent=1))
+    elif info.available:
+        print(t("Versione nuova: {latest} (installata: {current})", latest=info.latest, current=info.current))
+        print(t("Novità e download: {url}", url=info.url))
+        print(t("Per aggiornare: {how}", how=info.how))
+    elif info.latest:
+        print(t("wmt-pdf è aggiornato (versione {current}).", current=info.current))
+    else:
+        print(t("Nessuna versione pubblicata da confrontare con la {current}.", current=info.current))
+    return EXIT_OK
 
 
 def cmd_gui(args) -> int:

@@ -109,9 +109,9 @@ def _call(srv, path, body=None):
 
 
 def test_gui_language_setting(server, text_pdf):
-    assert _call(server, "/api/settings") == {"language": "it"}
+    assert _call(server, "/api/settings")["language"] == "it"
     assert _call(server, "/api/i18n") == {}
-    assert _call(server, "/api/settings", {"language": "en"}) == {"language": "en"}
+    assert _call(server, "/api/settings", {"language": "en"})["language"] == "en"
     merge = next(tool for tool in _call(server, "/api/tools") if tool["id"] == "merge")
     assert merge["label"] == "Merge" and merge["category_label"] == "Organise"
     assert _call(server, "/api/i18n")["Apri"] == "Open"

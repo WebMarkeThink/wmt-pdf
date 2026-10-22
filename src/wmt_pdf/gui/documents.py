@@ -42,7 +42,7 @@ def _settings_path() -> Path:
 
 
 def settings() -> dict:
-    """Impostazioni dell'interfaccia (per ora la lingua); quelle mancanti prendono il valore di default."""
+    """Impostazioni dell'interfaccia (lingua, controllo degli aggiornamenti); le mancanti hanno il valore di default."""
     from wmt_pdf.i18n import normalize, system_language
 
     try:
@@ -50,7 +50,11 @@ def settings() -> dict:
     except (OSError, ValueError):
         data = {}
     data = data if isinstance(data, dict) else {}
-    return {"language": normalize(data.get("language")) or normalize(os.environ.get("WPDF_LANG")) or system_language()}
+    update_check = data.get("update_check", True)
+    return {
+        "language": normalize(data.get("language")) or normalize(os.environ.get("WPDF_LANG")) or system_language(),
+        "update_check": update_check if isinstance(update_check, bool) else True,
+    }
 
 
 def save_settings(values: dict) -> dict:
@@ -62,6 +66,10 @@ def save_settings(values: dict) -> dict:
         raise ValueError(t("lingua non disponibile"))
     if language:
         current["language"] = language
+    if "update_check" in values:
+        if not isinstance(values["update_check"], bool):
+            raise ValueError(t("impostazione non valida: update_check"))
+        current["update_check"] = values["update_check"]
     target = _settings_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(current, indent=1), encoding="utf-8")

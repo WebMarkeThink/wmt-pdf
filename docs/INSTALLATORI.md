@@ -45,6 +45,16 @@ Sui server senza grafica l'OCR può chiedere `libgl1` (`sudo apt install libgl1`
 
 Ogni push esegue l'installazione con questo comando e tutti i test su Ubuntu (`.github/workflows/test.yml`).
 
+### Aggiornare
+
+L'app controlla una volta al giorno se su GitHub c'è una versione nuova e, se c'è, mostra **Aggiornamento** nella
+barra in alto (apre la pagina della release). Chi usa una beta vede anche le beta; chi usa una versione normale solo
+le versioni normali. Il controllo si spegne con «Controlla aggiornamenti» in basso a sinistra, o per tutto con la
+variabile `WPDF_NO_UPDATE_CHECK=1`.
+
+Dal terminale `wpdf update` (o `wpdf update --json`) controlla subito e dice come aggiornare: con l'installatore si
+installa la versione nuova sopra quella attuale; con uv si rilancia `uv tool install --force` con il nuovo tag.
+
 ### Prima volta dell'OCR
 
 I modelli dell'OCR (alcune decine di MB) si scaricano al primo uso e restano nella cache dell'utente; dopo

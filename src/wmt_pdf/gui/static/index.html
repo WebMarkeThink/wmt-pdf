@@ -26,6 +26,9 @@
           <option value="en">English</option>
         </select>
       </label>
+      <label class="check update-check" title="Una volta al giorno chiede a GitHub se c'è una versione nuova">
+        <input type="checkbox" id="update-check"><span>Controlla aggiornamenti</span>
+      </label>
       <p class="sidebar-note">I file restano su questo computer.</p>
     </aside>
 
@@ -69,6 +72,10 @@
           </button>
         </div>
         <div class="appbar-group right">
+          <button class="bar-btn update" id="cmd-update" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+            <span>Aggiornamento</span>
+          </button>
           <button class="bar-btn icon-only" id="cmd-undo" type="button" title="Annulla (Ctrl+Z)" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
           </button>

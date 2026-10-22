@@ -112,6 +112,7 @@ Per i PDF protetti: `--password` oppure `--password-env NOME_VARIABILE` (non res
 | `wpdf textobjects FILE --page N [--json]` | pezzi di testo della pagina con posizione, font e corpo |
 | `wpdf replace FILE "vecchio" "nuovo" [--pages ...] -o out.pdf` | sostituisce un testo in tutto il documento |
 | `wpdf edittext FILE --page N --at x,y --text "nuovo" -o out.pdf` | cambia il pezzo di testo in quel punto (testo vuoto: lo elimina); oppure `--index` |
+| `wpdf update [--json]` | controlla se c'è una versione nuova e dice come aggiornare |
 | `wpdf objects FILE --page N [--json]` | oggetti della pagina che si possono spostare: testo, immagini, elementi grafici, annotazioni |
 | `wpdf move FILE --page N --kind image --index I --by dx,dy -o out.pdf` | sposta un oggetto (`--kind` text, image, graphic, annotation); oppure `--to x,y` per l'angolo in basso a sinistra |
 | `wpdf movetext FILE --page N --index I --by dx,dy -o out.pdf` | sposta un pezzo di testo (stesso font e caratteri); oppure `--to x,y` per la nuova linea di base |

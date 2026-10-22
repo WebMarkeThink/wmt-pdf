@@ -21,8 +21,9 @@ Il programma non è ancora firmato digitalmente, quindi il sistema avvisa:
   Apri → Apri**. Se dice che l'app «è danneggiata», nel Terminale:
   `xattr -dr com.apple.quarantine /Applications/wmt-pdf.app`
 
-I file restano sul computer: niente viene caricato su server esterni (la rete serve solo, la prima volta, a
-scaricare i modelli dell'OCR e l'elenco europeo dei certificatori per la verifica delle firme).
+I file restano sul computer: niente viene caricato su server esterni. La rete serve solo a scaricare, la prima
+volta, i modelli dell'OCR e l'elenco europeo dei certificatori, e a chiedere a GitHub una volta al giorno se c'è una
+versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra).
 
 ## Cosa provare
 
@@ -34,6 +35,12 @@ scaricare i modelli dell'OCR e l'elenco europeo dei certificatori per la verific
 - Verifica di PDF firmati e di file `.p7m`; firma grafica.
 - **Compatta**: la barra sempre in primo piano su un lato dello schermo.
 - La lingua (italiano o inglese) dal selettore in basso a sinistra.
+
+## Aggiornamenti
+
+Quando esce una versione nuova, nella barra in alto compare **Aggiornamento**: apre la pagina da cui scaricarla.
+Si installa sopra quella attuale (su Windows l'installatore sostituisce la vecchia, sul Mac si trascina di nuovo in
+Applicazioni); le impostazioni restano. Dal terminale: `wpdf update`.
 
 ## Segnalare un problema
 

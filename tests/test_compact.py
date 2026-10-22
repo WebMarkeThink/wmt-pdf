@@ -168,7 +168,24 @@ def test_area_from_the_page_wins_and_is_validated(desktop):
     bar = created[0]
     assert (bar.kwargs["x"], bar.kwargs["y"]) == (410, 626)
     api.compact("top", {"x": 0, "y": 0, "width": 1280, "height": 680})  # già aperta: si sposta, non se ne apre un'altra
-    assert len(created) == 1 and ("move", 410, 0) in bar.calls
+    assert len(created) == 1 and not bar.calls  # non ancora comparsa: cambia solo dove comparirà
+    bar.events.loaded.handlers[0]()
+    assert bar.calls == [("resize", 460, 54), ("move", 410, 0), ("show",)]
+    api.dock("bottom", {"x": 0, "y": 0, "width": 1280, "height": 680})  # già comparsa: si sposta subito
+    assert bar.calls[-1] == ("move", 410, 626)
+
+
+def test_leftover_timer_does_not_touch_a_new_bar(desktop):
+    api, _, created = desktop
+    api.compact("left")
+    first = created[0]
+    api.expand()  # chiusa prima che comparisse: il suo timer scatterà più tardi
+    api.compact("right")
+    second = created[1]
+    api._place_compact(first)  # il timer della prima barra
+    assert not second.calls and not [c for c in first.calls if c[0] == "show"]
+    second.events.loaded.handlers[0]()
+    assert ("show",) in second.calls
 
 
 def test_malformed_action_is_cleaned_before_closing_the_bar(desktop):

@@ -540,6 +540,51 @@ function bindLanguage() {
   });
 }
 
+// --- aggiornamenti ---------------------------------------------------------------------------------------
+
+const RELEASE_URL = /^https:\/\/github\.com\/WebMarkeThink\/wmt-pdf\/releases(\/tag\/v?\d+\.\d+\.\d+([-.]?(a|alpha|b|beta|rc)[-.]?\d+)?)?$/i;
+
+async function checkUpdate() {
+  const button = $("cmd-update");
+  button.hidden = true;
+  let info;
+  try {
+    info = await api("/api/update");
+  } catch {
+    return; // nessuna risposta: nessun avviso
+  }
+  if (!info.enabled || !info.available) return;
+  button.hidden = false;
+  button.title = t("Versione {latest} disponibile (installata: {current}): apri la pagina per scaricarla",
+    { latest: info.latest, current: info.current });
+  if (!RELEASE_URL.test(info.url)) return; // solo pagine delle release di wmt-pdf
+  button.onclick = () => {
+    if (window.pywebview?.api?.open_url) window.pywebview.api.open_url(info.url);
+    else window.open(info.url, "_blank", "noopener");
+  };
+}
+
+async function bindUpdates() {
+  const box = $("update-check");
+  try {
+    box.checked = (await api("/api/settings")).update_check !== false;
+  } catch {
+    box.checked = true;
+  }
+  box.addEventListener("change", async () => {
+    try {
+      await post("/api/settings", { update_check: box.checked });
+    } catch (error) {
+      toast(error.message);
+      box.checked = !box.checked;
+      return;
+    }
+    if (box.checked) checkUpdate();
+    else $("cmd-update").hidden = true;
+  });
+  checkUpdate(); // in sottofondo: l'interfaccia non aspetta GitHub
+}
+
 async function reopenAfterReload() {
   let id = null;
   try {
@@ -563,6 +608,7 @@ async function start() {
   bindDrop();
   bindViewer();
   bindLanguage();
+  bindUpdates();
   show("home");
   await reopenAfterReload();
 }
