@@ -1,7 +1,7 @@
 # Installatori
 
 Per Windows e macOS c'è un installatore con tutto dentro (interfaccia, OCR, conversioni, firma e verifica) e il
-comando `wpdf` per il terminale e per Claude Code. Non serve Python né uv.
+comando `wpdf` per il terminale e per Claude Code. Non serve Python né uv. Su Linux basta un comando di uv.
 
 ## Installare
 
@@ -28,6 +28,22 @@ Si disinstalla da Impostazioni → App, che toglie anche `wpdf` dal PATH.
    ```bash
    sudo ln -sf /Applications/wmt-pdf.app/Contents/MacOS/wpdf /usr/local/bin/wpdf
    ```
+
+### Linux
+
+Niente installatore: un comando di [uv](https://docs.astral.sh/uv/), che scarica anche Python 3.12 se manca.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install "wmt-pdf[ocr,convert,firma] @ git+https://github.com/WebMarkeThink/wmt-pdf@v0.1.0-beta.1"
+```
+
+Dopo, `wpdf` è nel PATH (`~/.local/bin`). `wpdf gui` apre l'interfaccia nel browser: la finestra nativa su Linux
+richiede le librerie GTK e WebKit del sistema e qui non serve, l'interfaccia è la stessa. Per una versione nuova si
+rilancia il secondo comando con il nuovo tag e `--force`; si toglie con `uv tool uninstall wmt-pdf`.
+Sui server senza grafica l'OCR può chiedere `libgl1` (`sudo apt install libgl1`).
+
+Ogni push esegue l'installazione con questo comando e tutti i test su Ubuntu (`.github/workflows/test.yml`).
 
 ### Prima volta dell'OCR
 

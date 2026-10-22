@@ -8,8 +8,9 @@ Il piano completo, con interfaccia grafica e firma PAdES/CAdES, è in [docs/PIAN
 
 ## Installazione
 
-Il modo più semplice: l'installatore per Windows o macOS dalle release (tutto incluso, con il comando `wpdf`):
-istruzioni e avvisi della prima apertura in [docs/INSTALLATORI.md](docs/INSTALLATORI.md).
+Il modo più semplice: l'installatore per Windows o macOS dalle
+[release](https://github.com/WebMarkeThink/wmt-pdf/releases) (tutto incluso, con il comando `wpdf`); su Linux un
+comando di uv. Istruzioni e avvisi della prima apertura in [docs/INSTALLATORI.md](docs/INSTALLATORI.md).
 
 Dai sorgenti serve [uv](https://docs.astral.sh/uv/). Funziona su Windows, macOS e Linux.
 

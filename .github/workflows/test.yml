@@ -1,0 +1,40 @@
+# Test su Linux a ogni push: tutta la suite, e l'installazione come la fa un utente Linux (uv tool install).
+# Windows e macOS sono coperti dallo sviluppo locale e dal flusso degli installatori.
+name: Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Dipendenze
+        run: uv sync --all-extras --group dev
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Installazione come utente (uv tool install) e prova
+        run: |
+          uv tool install ".[ocr,convert,firma]"
+          export PATH="$HOME/.local/bin:$PATH"
+          cd "$RUNNER_TEMP"
+          uv run --project "$GITHUB_WORKSPACE" python -c "from reportlab.pdfgen import canvas; c = canvas.Canvas('prova.pdf'); c.setFont('Helvetica', 28); c.drawString(72, 700, 'Prova di installazione'); c.save()"
+          wpdf --version
+          wpdf --language en info prova.pdf | grep -q "Pages: 1"
+          wpdf text prova.pdf --ocr force | grep -qi "installazione"
+          printf '# Titolo\n\nUn paragrafo.\n' > nota.md
+          wpdf convert nota.md -o nota.pdf
+          wpdf text nota.pdf | grep -q "Un paragrafo"
+          (wpdf gui --no-window --port 8765 &) ; sleep 5
+          curl -sf http://127.0.0.1:8765/ | grep -q "wmt-pdf"
