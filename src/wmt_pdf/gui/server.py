@@ -432,6 +432,7 @@ class DesktopApi:
 
     _compact: Any = None  # barra compatta, quando c'è
     _compact_lock = threading.Lock()  # un doppio clic su «Compatta» non deve aprire due barre
+    _compact_place: tuple[int, int, int, int] | None = None  # dove mettere la barra appena caricata
 
     def __init__(self, server: GuiServer):
         self._server = server
@@ -482,7 +483,7 @@ class DesktopApi:
         """Nasconde la finestra principale e mostra la barra compatta sul lato scelto (top, right, bottom, left)."""
         import webview
 
-        from wmt_pdf.gui.compact import SIDES, geometry
+        from wmt_pdf.gui.compact import MIN_SIZE, SIDES, geometry
 
         side = side if side in SIDES else "top"
         with self._compact_lock:
@@ -491,11 +492,19 @@ class DesktopApi:
             else:
                 x, y, width, height = geometry(side, self._area(area, self._window))
                 port = self._server.server_address[1]
+                # Su Windows pywebview dà la dimensione prima di togliere il bordo: si applica il minimo di una
+                # finestra con barra del titolo (larga 120 px invece di 56) e poi l'altezza cala. La barra nasce
+                # nascosta e prende misura e posto giuste a pagina caricata, poi si mostra.
+                self._compact_place = (x, y, width, height)
                 self._compact = webview.create_window(
                     "wmt-pdf", f"http://127.0.0.1:{port}/compact?side={side}", js_api=self, x=x, y=y, width=width,
-                    height=height, frameless=True, easy_drag=False, on_top=True, resizable=False,
-                    background_color="#161b26")
+                    height=height, min_size=MIN_SIZE, hidden=True, frameless=True, easy_drag=False, on_top=True,
+                    resizable=False, background_color="#161b26")
                 self._compact.events.closed += self._compact_closed
+                self._compact.events.loaded += self._place_compact
+                timer = threading.Timer(5, self._place_compact)  # pagina mai caricata: la barra si mostra lo stesso
+                timer.daemon = True
+                timer.start()
         self._window.hide()
         return side
 
@@ -521,6 +530,17 @@ class DesktopApi:
             compact.destroy()
         if cleaned:
             self._window.evaluate_js(run_action_js(cleaned))
+
+    def _place_compact(self) -> None:
+        """Prima comparsa della barra, con le misure giuste (vedi compact); le volte dopo non fa nulla."""
+        with self._compact_lock:
+            bar, place, self._compact_place = self._compact, self._compact_place, None
+        if bar is None or place is None:
+            return
+        x, y, width, height = place
+        bar.resize(width, height)
+        bar.move(x, y)
+        bar.show()
 
     def _compact_closed(self) -> None:
         # Chiusa con Alt+F4 o simili: la finestra principale non deve restare nascosta per sempre.

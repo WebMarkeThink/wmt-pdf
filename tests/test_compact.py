@@ -19,18 +19,18 @@ AREA = (0, 0, 1920, 1040)  # schermo 1920x1080 con la barra delle applicazioni i
 
 
 @pytest.mark.parametrize("side, expected", [
-    ("top", (660, 0, 600, 56)),
-    ("bottom", (660, 984, 600, 56)),
-    ("left", (0, 220, 64, 600)),
-    ("right", (1856, 220, 64, 600)),
+    ("top", (730, 0, 460, 54)),
+    ("bottom", (730, 986, 460, 54)),
+    ("left", (0, 290, 56, 460)),
+    ("right", (1864, 290, 56, 460)),
 ])
 def test_geometry_on_each_side(side, expected):
     assert geometry(side, AREA) == expected
 
 
 def test_geometry_on_second_screen_and_small_screen():
-    assert geometry("right", (1920, 0, 1280, 1000)) == (1920 + 1280 - 64, 200, 64, 600)
-    assert geometry("left", (0, 0, 800, 500)) == (0, 0, 64, 500)  # mai più alta dello schermo
+    assert geometry("right", (1920, 0, 1280, 1000)) == (1920 + 1280 - 56, 270, 56, 460)
+    assert geometry("left", (0, 0, 800, 400)) == (0, 0, 56, 400)  # mai più alta dello schermo
 
 
 class Screen:
@@ -90,7 +90,7 @@ class FakeWindow:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
         self.x, self.y, self.width, self.height = 100, 100, 1280, 840
-        self.events = types.SimpleNamespace(closing=Event(), closed=Event())
+        self.events = types.SimpleNamespace(closing=Event(), closed=Event(), loaded=Event())
         self.calls = []
 
     def __getattr__(self, name):  # hide, show, destroy, resize, move, evaluate_js
@@ -121,10 +121,16 @@ def test_compact_dock_and_expand(desktop):
     assert api.compact("left") == "left"
     bar = created[0]
     assert bar.kwargs["on_top"] and bar.kwargs["frameless"] and "/compact?side=left" in bar.kwargs["url"]
-    assert (bar.kwargs["x"], bar.kwargs["y"], bar.kwargs["width"], bar.kwargs["height"]) == (0, 220, 64, 600)
+    assert (bar.kwargs["x"], bar.kwargs["y"], bar.kwargs["width"], bar.kwargs["height"]) == (0, 290, 56, 460)
+    assert bar.kwargs["min_size"][0] <= 56  # altrimenti pywebview la allarga a 200 px
+    assert bar.kwargs["hidden"] and ("show",) not in bar.calls  # compare solo con le misure giuste
+    bar.events.loaded.handlers[0]()
+    assert bar.calls[:3] == [("resize", 56, 460), ("move", 0, 290), ("show",)]
+    bar.events.loaded.handlers[0]()  # ricaricata: non si rimette a posto da sola
+    assert bar.calls.count(("show",)) == 1
     assert ("hide",) in main.calls
     assert api.dock("bottom") == "bottom"
-    assert ("resize", 600, 56) in bar.calls and ("move", 660, 984) in bar.calls
+    assert ("resize", 460, 54) in bar.calls and ("move", 730, 986) in bar.calls
     assert api.dock("in diagonale") == ""
     api.expand({"tool": "merge", "files": [{"id": "abc", "name": "a.pdf"}]})
     assert ("show",) in main.calls and ("destroy",) in bar.calls
@@ -160,9 +166,9 @@ def test_area_from_the_page_wins_and_is_validated(desktop):
     # Schermo in scala 150%: la pagina vede 1280x680 pixel CSS, ed è in queste unità che pywebview sposta.
     api.compact("bottom", {"x": 0, "y": 0, "width": 1280, "height": 680})
     bar = created[0]
-    assert (bar.kwargs["x"], bar.kwargs["y"]) == (340, 624)
+    assert (bar.kwargs["x"], bar.kwargs["y"]) == (410, 626)
     api.compact("top", {"x": 0, "y": 0, "width": 1280, "height": 680})  # già aperta: si sposta, non se ne apre un'altra
-    assert len(created) == 1 and ("move", 340, 0) in bar.calls
+    assert len(created) == 1 and ("move", 410, 0) in bar.calls
 
 
 def test_malformed_action_is_cleaned_before_closing_the_bar(desktop):

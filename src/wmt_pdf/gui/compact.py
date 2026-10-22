@@ -11,8 +11,12 @@ import json
 from typing import Any
 
 SIDES = ("top", "right", "bottom", "left")
-HORIZONTAL = (600, 56)  # larghezza, altezza in alto e in basso
-VERTICAL = (64, 600)  # a sinistra e a destra
+# Quanto basta ai pulsanti (40 px l'uno), senza spazio vuoto: larghezza, altezza.
+HORIZONTAL = (460, 54)  # in alto e in basso
+VERTICAL = (56, 460)  # a sinistra e a destra
+# pywebview impone 200x100 a ogni finestra se non si dice altro: la barra verticale diventava larga 200 px e, a
+# destra, finiva per metà fuori dallo schermo (in basso lo stesso con l'altezza).
+MIN_SIZE = (40, 40)
 
 
 def size_for(side: str) -> tuple[int, int]:
