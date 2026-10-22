@@ -37,6 +37,10 @@ jobs:
       - name: Dipendenze
         run: uv sync --all-extras --group build --group dev
 
+      - name: Test (macOS; su Windows girano a ogni sviluppo)
+        if: runner.os == 'macOS'
+        run: uv run pytest -q
+
       - name: Versione
         id: version
         run: |
