@@ -16,6 +16,9 @@ ICONS = HERE / "build" / "icons"
 MAC = sys.platform == "darwin"
 
 datas, binaries, hidden = [], [], collect_submodules("wmt_pdf")
+LICENSES = HERE / "build" / "THIRD_PARTY_LICENSES.txt"  # da packaging/third_party.py
+if LICENSES.exists():
+    datas.append((str(LICENSES), "."))
 # Pacchetti con file di dati o librerie native che l'analisi da sola non vede tutti.
 for package in ("wmt_pdf", "pypdfium2", "pypdfium2_raw", "rapidocr", "xhtml2pdf", "reportlab", "pyhanko",
                 "pyhanko_certvalidator", "webview", "pikepdf", "pdfplumber", "pdfminer"):
@@ -38,7 +41,8 @@ a = Analysis(  # noqa: F821
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden,
-    excludes=["tkinter", "matplotlib", "IPython", "pytest"],
+    # svglib è LGPL: xhtml2pdf ne fa a meno (le immagini SVG nei documenti convertiti si saltano).
+    excludes=["tkinter", "matplotlib", "IPython", "pytest", "svglib"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)  # noqa: F821
@@ -60,18 +64,23 @@ cli = EXE(  # noqa: F821
 coll = COLLECT(gui, cli, a.binaries, a.datas, name="wmt-pdf")  # noqa: F821
 
 if MAC:
+    import re
+
     from wmt_pdf import __version__
+
+    numeric = re.match(r"\d+(\.\d+)*", __version__).group(0)  # macOS vuole solo numeri (0.1.0b1 → 0.1.0)
 
     app = BUNDLE(  # noqa: F821
         coll,
         name="wmt-pdf.app",
         icon=icon,
         bundle_identifier="it.webmarkethink.wmt-pdf",
-        version=__version__,
+        version=numeric,
         info_plist={
             "CFBundleName": "wmt-pdf",
             "CFBundleDisplayName": "wmt-pdf",
-            "CFBundleShortVersionString": __version__,
+            "CFBundleShortVersionString": numeric,
+            "CFBundleVersion": __version__,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "15.0",  # pikepdf: pacchetti per macOS 15 o successivo
             "CFBundleDocumentTypes": [{

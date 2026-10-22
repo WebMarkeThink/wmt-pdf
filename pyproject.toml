@@ -1,6 +1,6 @@
 [project]
 name = "wmt-pdf"
-version = "0.1.0"
+version = "0.1.0b1"
 description = "Lettura, estrazione, OCR e verifica firme di PDF e p7m, con una CLI pensata per gli agenti (pochi token)."
 readme = "README.md"
 authors = [
@@ -49,6 +49,7 @@ wmt-pdf = "wmt_pdf.cli:main"
 
 [dependency-groups]
 build = [
+    "pip-licenses>=5",
     "pyinstaller>=6.10",
 ]
 dev = [
