@@ -224,6 +224,15 @@ Non leggere i PDF con Read: usa `wpdf`.
 - Conversione di un `.html` o `.md`: può includere immagini della sua cartella (e sottocartelle). Per un HTML scaricato
   da fonti non fidate conviene spostarlo prima in una cartella a sé.
 
+## Licenza
+
+wmt-pdf è software libero: © WebMarkeThink, distribuito con la licenza
+[GNU Affero General Public License, versione 3 o successiva](LICENSE) (AGPL-3.0-or-later). Si può usare, studiare,
+modificare e ridistribuire; chi distribuisce una versione modificata, o la offre come servizio in rete, deve renderne
+disponibile il codice con la stessa licenza. Per usi che non permettono questi obblighi si può chiedere a
+WebMarkeThink una licenza commerciale. Le librerie incluse negli installatori hanno le loro licenze, elencate in
+`THIRD_PARTY_LICENSES.txt` accanto al programma.
+
 ## Sviluppo
 
 ```bash

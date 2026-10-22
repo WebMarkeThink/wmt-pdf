@@ -3,6 +3,8 @@ name = "wmt-pdf"
 version = "0.1.0b2"
 description = "Lettura, estrazione, OCR e verifica firme di PDF e p7m, con una CLI pensata per gli agenti (pochi token)."
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [
     { name = "WebMarkeThink", email = "info@webmarkethink.it" }
 ]

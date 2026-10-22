@@ -19,6 +19,7 @@ datas, binaries, hidden = [], [], collect_submodules("wmt_pdf")
 LICENSES = HERE / "build" / "THIRD_PARTY_LICENSES.txt"  # da packaging/third_party.py
 if LICENSES.exists():
     datas.append((str(LICENSES), "."))
+datas.append((str(HERE.parent / "LICENSE"), "."))  # AGPL-3.0-or-later
 # Pacchetti con file di dati o librerie native che l'analisi da sola non vede tutti.
 for package in ("wmt_pdf", "pypdfium2", "pypdfium2_raw", "rapidocr", "xhtml2pdf", "reportlab", "pyhanko",
                 "pyhanko_certvalidator", "webview", "pikepdf", "pdfplumber", "pdfminer"):
