@@ -20,3 +20,6 @@ wheels/
 # Installatori
 /packaging/build/
 /packaging/dist/
+
+# Note di lavoro interne (stato del progetto): restano sul disco, fuori dal repository
+/docs/STATO.md
