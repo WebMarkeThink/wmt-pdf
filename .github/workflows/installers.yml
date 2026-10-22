@@ -1,0 +1,93 @@
+# Installatori di wmt-pdf: Windows (Inno Setup) e macOS (.dmg, Apple Silicon e Intel).
+# Parte con un tag v* (e allega i file alla release) oppure a mano da Actions → Run workflow.
+# Per ora senza firma del codice: vedi docs/INSTALLATORI.md.
+name: Installatori
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: macos-26
+            arch: arm64
+          - os: macos-26-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Dipendenze
+        run: uv sync --all-extras --group build --group dev
+
+      - name: Versione
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(uv run python -c 'import wmt_pdf; print(wmt_pdf.__version__)')"; fi
+          echo "value=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Icone
+        run: uv run --group build python packaging/make_icons.py
+
+      - name: PyInstaller
+        run: uv run --group build pyinstaller --noconfirm --clean --workpath packaging/build/work --distpath packaging/dist packaging/wmt-pdf.spec
+
+      - name: Prova del programma impacchettato
+        run: |
+          WPDF=packaging/dist/wmt-pdf/wpdf
+          uv run python -c "from reportlab.pdfgen import canvas; c = canvas.Canvas('prova.pdf'); c.setFont('Helvetica', 28); c.drawString(72, 700, 'Prova di installazione'); c.save()"
+          "$WPDF" --version
+          "$WPDF" --language en info prova.pdf | tee info.txt
+          grep -q "Pages: 1" info.txt
+          "$WPDF" text prova.pdf | grep -q "Prova di installazione"
+          "$WPDF" text prova.pdf --ocr force | grep -qi "installazione"
+
+      - name: Installatore Windows
+        if: runner.os == 'Windows'
+        run: |
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [[ ! -f "$ISCC" ]]; then choco install innosetup -y --no-progress; fi
+          "$ISCC" "//DAppVersion=${{ steps.version.outputs.value }}" "//DSourceDir=..\dist\wmt-pdf" "//DIconFile=..\build\icons\wmt-pdf.ico" packaging/windows/wmt-pdf.iss
+
+      - name: Immagine disco macOS
+        if: runner.os == 'macOS'
+        run: sh packaging/macos/make_dmg.sh "${{ steps.version.outputs.value }}" "${{ matrix.arch }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wmt-pdf-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            packaging/dist/*-setup.exe
+            packaging/dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

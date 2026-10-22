@@ -250,7 +250,8 @@ def cmd_text(args) -> int:
         doc.close()
 
     budget = args.max_tokens
-    header = [t("# {name} — {total} pagine", name=source.name, total=total)]
+    header = [t("# {name} — 1 pagina", name=source.name) if total == 1
+              else t("# {name} — {total} pagine", name=source.name, total=total)]
     banner = p7m_banner(source)
     if banner:
         header.append(banner)

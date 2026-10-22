@@ -199,7 +199,11 @@ def cmd_convert(args) -> int:
     converted = to_pdf(src, attachments=args.attachments)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(converted.data)
-    print(t("{target}: {count} pagine, {kb}", target=target, count=_count(converted.data, None), kb=_kb(len(converted.data))))
+    count, kb = _count(converted.data, None), _kb(len(converted.data))
+    if count == 1:
+        print(t("{target}: 1 pagina, {kb}", target=target, kb=kb))
+    else:
+        print(t("{target}: {count} pagine, {kb}", target=target, count=count, kb=kb))
     for note in converted.notes:
         print(f"- {note}")
     return EXIT_OK

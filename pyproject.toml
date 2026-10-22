@@ -43,6 +43,9 @@ wpdf = "wmt_pdf.cli:main"
 wmt-pdf = "wmt_pdf.cli:main"
 
 [dependency-groups]
+build = [
+    "pyinstaller>=6.10",
+]
 dev = [
     "pytest>=8",
     "pytest-cov>=6",

@@ -13,3 +13,10 @@ wheels/
 .pytest_cache/
 .ruff_cache/
 *.png
+
+# PDF di prova lasciati nella cartella principale
+/*.pdf
+
+# Installatori
+/packaging/build/
+/packaging/dist/
