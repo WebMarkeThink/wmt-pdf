@@ -73,7 +73,7 @@ if MAC:
             "CFBundleDisplayName": "wmt-pdf",
             "CFBundleShortVersionString": __version__,
             "NSHighResolutionCapable": True,
-            "LSMinimumSystemVersion": "11.0",
+            "LSMinimumSystemVersion": "15.0",  # pikepdf: pacchetti per macOS 15 o successivo
             "CFBundleDocumentTypes": [{
                 "CFBundleTypeName": "PDF",
                 "CFBundleTypeRole": "Editor",

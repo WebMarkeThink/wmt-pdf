@@ -17,7 +17,7 @@ comando `wpdf` per il terminale e per Claude Code. Non serve Python né uv.
 Serve WebView2, il motore di Edge, già presente in Windows 11 e nei Windows 10 aggiornati.
 Si disinstalla da Impostazioni → App, che toglie anche `wpdf` dal PATH.
 
-### macOS (11 o successivo)
+### macOS (15 Sequoia o successivo)
 
 1. Scarica il `.dmg` adatto al Mac: `macos-arm64` per Apple Silicon (M1 e successivi), `macos-x86_64` per Intel.
 2. Aprilo e trascina **wmt-pdf** in **Applicazioni**.
