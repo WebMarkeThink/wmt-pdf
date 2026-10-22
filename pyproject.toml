@@ -19,7 +19,9 @@ dependencies = [
 [project.optional-dependencies]
 ocr = [
     "rapidocr>=3.10,<4",
-    "onnxruntime>=1.20",
+    "onnxruntime>=1.20; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # Le versioni recenti non hanno più i pacchetti per i Mac Intel: lì si usa l'ultima che li ha.
+    "onnxruntime>=1.20; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 convert = [
     "mammoth>=1.13,<2",
@@ -59,3 +61,11 @@ markers = ["ocr: richiede l'extra ocr e scarica i modelli al primo uso"]
 [build-system]
 requires = ["uv_build>=0.11.15,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+# Piattaforme degli installatori: il lock deve avere pacchetti per tutte.
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
