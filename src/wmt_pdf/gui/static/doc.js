@@ -68,44 +68,85 @@ export function initDocs(context) {
 
 // --- apertura e caricamento ---------------------------------------------------------------
 
-export async function openDocument(body) {
-  if (doc.state?.modified &&
-      !window.confirm(t("«{name}» ha modifiche non salvate. Vuoi aprire un altro documento e perderle?",
-        { name: doc.state.name }))) {
-    return;
-  }
-  try {
-    const state = await post("/api/doc/open", body);
-    doc.page = 1;
-    ctx.show("doc"); // la vista compare subito; la pagina si disegna appena pronta
-    await load(state);
-  } catch (error) {
-    toast(`Apertura non riuscita: ${error.message}`);
-  }
+// --- schede: più documenti aperti insieme ------------------------------------------------------------
+// Ogni documento aperto è una scheda con la sua pagina e il suo zoom; la vista ne mostra uno alla volta (quello
+// attivo, in doc.state). Sul server i documenti restano tutti aperti, con le loro versioni.
+
+const tabs = []; // { id, state, page, scale }
+const tabOf = (id) => tabs.find((tab) => tab.id === id);
+
+export const openTabs = () => tabs.map((tab) => tab.state);
+export const activeTabId = () => doc.state?.id ?? null;
+
+function rememberView() {
+  const tab = doc.state && tabOf(doc.state.id);
+  if (tab) Object.assign(tab, { page: doc.page, scale: doc.scale });
 }
 
-// Documento aperto dal server per un doppio clic su un PDF (con wmt-pdf già aperto): se quello aperto qui ha
-// modifiche non salvate si chiede prima; se si rinuncia, il nuovo si richiude.
-export async function showOpenedDocument(id) {
-  if (doc.state?.modified && doc.state.id !== id &&
-      !window.confirm(t("«{name}» ha modifiche non salvate. Vuoi aprire un altro documento e perderle?",
-        { name: doc.state.name }))) {
-    await post(`/api/doc/${id}/close`).catch(() => {});
+async function showTab(state) {
+  // Lo stesso file già aperto in una scheda: si torna a quella (il doppione appena aperto sul server si chiude).
+  const same = state.path && tabs.find((tab) => tab.state.path === state.path && tab.id !== state.id);
+  if (same) {
+    post(`/api/doc/${state.id}/close`).catch(() => {});
+    return activateTab(same.id);
+  }
+  rememberView();
+  let tab = tabOf(state.id);
+  if (!tab) {
+    tab = { id: state.id, state, page: 1, scale: doc.scale };
+    tabs.push(tab);
+  }
+  closePopover();
+  doc.page = tab.page;
+  doc.scale = tab.scale;
+  ctx.show("doc"); // la vista compare subito; la pagina si disegna appena pronta
+  return load(state);
+}
+
+export async function activateTab(id) {
+  const tab = tabOf(id);
+  if (!tab || doc.busy) return;
+  if (doc.state?.id === id) {
+    ctx.show("doc");
     return;
   }
+  await showTab(tab.state);
+}
+
+// Ctrl+Tab e Ctrl+Maiusc+Tab: la scheda dopo o prima, in giro.
+export function cycleTab(step) {
+  if (tabs.length < 2 || !doc.state) return;
+  const index = tabs.findIndex((tab) => tab.id === doc.state.id);
+  activateTab(tabs[(index + step + tabs.length) % tabs.length].id);
+}
+
+export async function openDocument(body) {
+  // Lo stesso file già aperto: si torna alla sua scheda invece di aprirne un'altra copia.
+  const open = body.path && tabs.find((tab) => tab.state.path === body.path);
+  if (open) return activateTab(open.id);
+  try {
+    await showTab(await post("/api/doc/open", body));
+  } catch (error) {
+    toast(t("Apertura non riuscita: {error}", { error: error.message }));
+  }
+  return undefined;
+}
+
+// Documento aperto dal server per un doppio clic su un PDF (con wmt-pdf già aperto): una scheda in più.
+export async function showOpenedDocument(id) {
   await reopenDocument(id).catch((error) => toast(error.message));
 }
 
-// Dopo un ricaricamento della pagina (es. cambio di lingua): il documento è ancora aperto sul server.
+// Documento già aperto sul server (doppio clic, ricaricamento della pagina): la sua scheda.
 export async function reopenDocument(id) {
-  const state = await api(`/api/doc/${id}`);
-  ctx.show("doc");
-  await load(state);
+  await showTab(await api(`/api/doc/${id}`));
 }
 
 async function load(state) {
   window.getSelection()?.removeAllRanges(); // nessuna selezione rimasta sopra la pagina dopo una modifica
   doc.state = state;
+  const tab = tabOf(state.id);
+  if (tab) tab.state = state; // versione nuova, salvato o no: la scheda lo mostra
   const data = new Uint8Array(await (await fetchBlob(state.file_id)).arrayBuffer());
   if (doc.loading) await doc.loading.destroy(); // in PDF.js 6 si chiude dal task di caricamento
   doc.loading = pdfjs.getDocument({ data, ...PDF_OPTIONS });
@@ -610,6 +651,14 @@ export async function closeDocument() {
     // già sparito dal server (es. riavviato): si chiude comunque la vista
   }
   closePopover();
+  const index = tabs.findIndex((tab) => tab.id === closing.id);
+  if (index >= 0) tabs.splice(index, 1);
+  const next = tabs[Math.min(Math.max(index, 0), tabs.length - 1)];
+  if (next) { // si passa alla scheda accanto
+    doc.state = null;
+    await showTab(next.state);
+    return true;
+  }
   if (doc.task) doc.task.cancel();
   if (doc.loading) await doc.loading.destroy().catch(() => {});
   Object.assign(doc, { state: null, pdf: null, loading: null, viewport: null, page: 1, selected: null, reselect: null });
@@ -619,6 +668,13 @@ export async function closeDocument() {
   message("");
   ctx.show("home");
   return true;
+}
+
+// Chiude una scheda qualsiasi: prima la si mostra, così l'eventuale domanda sulle modifiche è chiara.
+export async function closeTab(id) {
+  if (doc.busy) return false;
+  if (doc.state?.id !== id) await activateTab(id);
+  return closeDocument();
 }
 
 // --- unione con altri file -------------------------------------------------------------------------

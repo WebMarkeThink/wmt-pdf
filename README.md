@@ -33,8 +33,10 @@ uv run wpdf gui              # oppure: uv run wpdf gui documento.pdf
 ```
 
 Due modi di lavorare, con la barra in alto sempre disponibile (Apri, Recenti, Unisci, Annulla, Ripeti, Salva,
-Salva con nome, Scarica). Il documento aperto si chiude con la × accanto al nome o con Ctrl+W: se ci sono
-modifiche non salvate si sceglie tra Salva, Non salvare e Annulla.
+Salva con nome, Scarica). Ogni documento aperto ha la sua scheda nella barra, come in Acrobat: si passa dall'uno
+all'altro con un clic o con Ctrl+Tab (Ctrl+Maiusc+Tab per tornare indietro), ognuno con la sua pagina e il suo zoom;
+«+» apre un altro file. Una scheda si chiude con la × o con Ctrl+W: se ci sono modifiche non salvate si sceglie tra
+Salva, Non salvare e Annulla. Riaprire un file già aperto riporta alla sua scheda.
 
 - **Documento**: si apre un PDF (Apri, trascinandolo nella finestra, o dai recenti) e lo si modifica direttamente.
   Con «Seleziona» (il puntatore) si vedono contornati gli oggetti della pagina (testo, immagini, firme grafiche,

@@ -30,7 +30,20 @@
 .menu button:hover { background: var(--surface-2); }
 .menu small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .menu .menu-empty { padding: 10px; color: var(--muted); font-size: 14px; }
-.doc-tab { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 10px; border-radius: 9px; background: var(--surface-2); }
+.doc-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; overflow-x: auto; scrollbar-width: thin; }
+.doc-tab {
+  display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 220px; flex: 0 1 auto;
+  padding: 4px 6px 4px 10px; border-radius: 9px; background: transparent; border: 1px solid transparent;
+}
+.doc-tab:hover { background: var(--surface-2); }
+.doc-tab.active { background: var(--surface-2); border-color: var(--border); }
+.doc-tab .doc-close { visibility: hidden; }
+.doc-tab.active .doc-close, .doc-tab:hover .doc-close { visibility: visible; }
+.doc-tab-add {
+  display: inline-flex; border: 0; background: none; color: var(--muted); padding: 5px; border-radius: 8px; cursor: pointer;
+}
+.doc-tab-add:hover { background: var(--surface-2); color: var(--text); }
+.doc-tab-add svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 .doc-tab-name {
   border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34vw;
@@ -177,3 +190,5 @@ body.doc-open .sidebar { display: none; }
    riquadro di modifica evidenzierebbero tutto in scuro sopra il documento. */
 .thumbs, .stage-bar, .canvas-wrap, .page-holder, .overlay, .tbox { user-select: none; -webkit-user-select: none; }
 .page-holder canvas { -webkit-user-drag: none; }
+.doc-tab:not(.active) .doc-tab-name { font-weight: 500; color: var(--muted); }
+.doc-tab:not(.active):hover .doc-tab-name { color: var(--text); }

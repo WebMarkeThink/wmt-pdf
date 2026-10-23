@@ -66,13 +66,7 @@
             </div>
           </div>
         </div>
-        <div class="doc-tab" id="doc-tab" hidden>
-          <button class="doc-tab-name" id="doc-name" type="button" title="Torna al documento"></button>
-          <span class="doc-dirty" id="doc-dirty" title="Modifiche non salvate" hidden>●</span>
-          <button class="doc-close" id="doc-close" type="button" title="Chiudi il documento (Ctrl+W)" aria-label="Chiudi il documento">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
-        </div>
+        <div class="doc-tabs" id="doc-tabs" role="tablist" aria-label="Documenti aperti" hidden></div>
         <div class="appbar-group right">
           <button class="bar-btn update" id="cmd-update" type="button" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>

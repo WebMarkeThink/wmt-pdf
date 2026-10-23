@@ -27,7 +27,8 @@ versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra
 
 ## Cosa provare
 
-- Aprire PDF diversi (fatture, contratti, scansioni) e scorrere le pagine.
+- Aprire PDF diversi (fatture, contratti, scansioni) e scorrere le pagine; più documenti insieme, ognuno nella sua
+  scheda in alto (Ctrl+Tab per passare dall'uno all'altro).
 - Su Windows: scegliere wmt-pdf come app predefinita per i PDF (opzione alla fine dell'installazione, oppure
   «App predefinita per i PDF…» in basso a sinistra) e aprire i PDF con un doppio clic, anche con l'app già aperta.
 - **Seleziona**: spostare testi, immagini, firme e timbri trascinandoli; doppio clic su un testo per cambiarlo.

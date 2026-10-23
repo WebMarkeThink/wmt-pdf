@@ -5,7 +5,8 @@ import {
 } from "./common.js";
 import {
   PDF_OPTIONS, clearSelection, closeDocument, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav,
-  pdfjs, redo, reopenDocument, save, saveAs, showOpenedDocument, undo,
+  activateTab, activeTabId, closeTab, cycleTab, openTabs, pdfjs, redo, reopenDocument, save, saveAs,
+  showOpenedDocument, undo,
 } from "./doc.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -31,14 +32,45 @@ function show(view) {
   updateBar();
 }
 
+const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const PLUS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+
+// Una scheda per documento aperto (come in Acrobat): nome, pallino se ci sono modifiche, × per chiuderla, + in fondo.
+function renderTabs() {
+  const strip = $("doc-tabs");
+  const docs = openTabs();
+  strip.hidden = !docs.length;
+  strip.innerHTML = "";
+  const active = state.view === "doc" ? activeTabId() : null;
+  for (const item of docs) {
+    const tab = el("div", { class: `doc-tab${item.id === active ? " active" : ""}`, role: "tab",
+      "aria-selected": String(item.id === active) });
+    const name = el("button", { class: "doc-tab-name", type: "button", title: item.path || item.name });
+    name.textContent = item.name;
+    name.addEventListener("click", () => activateTab(item.id));
+    tab.append(name);
+    if (item.modified) tab.append(el("span", { class: "doc-dirty", title: t("Modifiche non salvate") }, "●"));
+    const close = el("button", { class: "doc-close", type: "button", title: t("Chiudi il documento (Ctrl+W)"),
+      "aria-label": t("Chiudi il documento") }, CLOSE_ICON);
+    close.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeTab(item.id);
+    });
+    tab.append(close);
+    strip.append(tab);
+  }
+  if (docs.length) {
+    const add = el("button", { class: "doc-tab-add", type: "button", title: t("Apri un altro documento (Ctrl+O)"),
+      "aria-label": t("Apri un altro documento") }, PLUS_ICON);
+    add.addEventListener("click", openCommand);
+    strip.append(add);
+    strip.querySelector(".doc-tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+}
+
 function updateBar() {
   const doc = currentDoc();
-  $("doc-tab").hidden = !doc;
-  if (doc) {
-    $("doc-name").textContent = doc.name;
-    $("doc-name").title = doc.path || doc.name;
-    $("doc-dirty").hidden = !doc.modified;
-  }
+  renderTabs();
   $("cmd-undo").disabled = !doc?.can_undo;
   $("cmd-redo").disabled = !doc?.can_redo;
   for (const id of ["cmd-save", "cmd-saveas", "cmd-download"]) $(id).disabled = !doc;
@@ -427,8 +459,6 @@ function bindCommands() {
   $("cmd-save").addEventListener("click", save);
   $("cmd-saveas").addEventListener("click", saveAs);
   $("cmd-download").addEventListener("click", download);
-  $("doc-name").addEventListener("click", () => show("doc"));
-  $("doc-close").addEventListener("click", closeDocument);
   $("cmd-merge").addEventListener("click", () => {
     const merge = state.tools.find((t) => t.id === "merge");
     if (merge) openTool(merge);
@@ -460,6 +490,9 @@ function bindCommands() {
     } else if (mod && key === "w" && currentDoc()) {
       event.preventDefault();
       closeDocument();
+    } else if (mod && (event.key === "Tab" || event.key === "PageDown" || event.key === "PageUp") && currentDoc()) {
+      event.preventDefault(); // Ctrl+Tab / Ctrl+PagGiù: scheda dopo; con Maiusc o PagSu: scheda prima
+      cycleTab(event.key === "PageUp" || (event.key === "Tab" && event.shiftKey) ? -1 : 1);
     } else if (mod && !typing && key === "z") {
       event.preventDefault();
       if (event.shiftKey) redo();
@@ -531,10 +564,11 @@ function bindLanguage() {
       select.value = lang();
       return;
     }
-    // La pagina si ricarica nella nuova lingua; il documento aperto (con le sue versioni) resta sul server.
+    // La pagina si ricarica nella nuova lingua; i documenti aperti (con le loro versioni) restano sul server.
     const doc = currentDoc();
     try {
-      if (doc) sessionStorage.setItem(REOPEN, doc.id);
+      const ids = openTabs().map((item) => item.id);
+      if (ids.length) sessionStorage.setItem(REOPEN, JSON.stringify({ ids, active: doc?.id ?? null }));
     } catch {
       // senza sessionStorage il documento si riapre dai recenti
     }
@@ -609,14 +643,16 @@ function bindDefaultApp() {
 }
 
 async function reopenAfterReload() {
-  let id = null;
+  let saved = null;
   try {
-    id = sessionStorage.getItem(REOPEN);
+    saved = JSON.parse(sessionStorage.getItem(REOPEN) || "null");
     sessionStorage.removeItem(REOPEN);
   } catch {
     return;
   }
-  if (id) await reopenDocument(id).catch(() => {});
+  if (!saved?.ids) return;
+  for (const id of saved.ids) await reopenDocument(id).catch(() => {}); // tutte le schede, nello stesso ordine
+  if (saved.active) await activateTab(saved.active);
 }
 
 async function start() {
