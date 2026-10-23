@@ -2,7 +2,6 @@
 import * as pdfjs from "/static/vendor/pdf.min.mjs";
 import {
   $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, t, toast,
-  upload,
 } from "./common.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.min.mjs";
@@ -39,16 +38,9 @@ export function initDocs(context) {
   $("overlay").addEventListener("click", onOverlayClick);
   $("page-rotate").addEventListener("click", () => apply("rotate", { angle: "90", pages: String(doc.page) }));
   $("page-delete").addEventListener("click", deletePage);
-  const merge = ctx.tools().find((t) => t.id === "merge");
-  if (merge && !merge.accept.includes("*")) $("merge-input").accept = merge.accept.join(",");
-  $("doc-merge").addEventListener("click", () => $("merge-input").click());
-  $("merge-input").addEventListener("change", () => {
-    const files = [...$("merge-input").files];
-    $("merge-input").value = "";
-    if (files.length) chooseMergePosition(files);
-  });
-  $("md-cancel").addEventListener("click", () => $("merge-dialog").close());
-  $("md-run").addEventListener("click", runMerge);
+  // Pagine e file da aggiungere: si vedono e si ordinano nell'organizzatore (organize.js, collegato da app.js).
+  $("page-organize").addEventListener("click", () => ctx.organize());
+  $("doc-merge").addEventListener("click", () => ctx.organize({ pickFiles: true }));
   $("find-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const find = $("find-text").value;
@@ -614,6 +606,10 @@ export async function saveAs() {
   }
 }
 
+export async function download() {
+  if (doc.state) await downloadFile(doc.state.file_id, doc.state.name).catch((e) => toast(e.message));
+}
+
 // --- chiusura --------------------------------------------------------------------------------------
 
 function askClose() {
@@ -675,42 +671,6 @@ export async function closeTab(id) {
   if (doc.busy) return false;
   if (doc.state?.id !== id) await activateTab(id);
   return closeDocument();
-}
-
-// --- unione con altri file -------------------------------------------------------------------------
-
-let mergeFiles = [];
-
-function chooseMergePosition(files) {
-  mergeFiles = files;
-  const list = $("md-files");
-  list.innerHTML = "";
-  for (const file of files) {
-    const item = el("li");
-    item.textContent = file.name;
-    list.append(item);
-  }
-  $("merge-dialog").showModal();
-}
-
-async function runMerge() {
-  const position = document.querySelector('input[name="md-position"]:checked').value;
-  $("merge-dialog").close();
-  const files = mergeFiles;
-  mergeFiles = [];
-  message(t("Caricamento di {n} file…", { n: files.length }));
-  let ids;
-  try {
-    ids = (await Promise.all(files.map((f) => upload(f)))).map((info) => info.id);
-  } catch (error) {
-    message(error.message, true);
-    return;
-  }
-  await apply("merge", { bookmarks: false }, { files: ids, position });
-}
-
-export async function download() {
-  if (doc.state) await downloadFile(doc.state.file_id, doc.state.name).catch((e) => toast(e.message));
 }
 
 // --- altri strumenti sul documento ----------------------------------------------------------------

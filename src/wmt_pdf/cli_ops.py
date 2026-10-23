@@ -33,6 +33,12 @@ def register(sub) -> None:
     p.add_argument("--no-bookmarks", action="store_true")
     p.add_argument("--attachments", action="store_true", help=t("per le email: accoda anche gli allegati"))
 
+    p = add("assemble", cmd_assemble, t("Compone un PDF scegliendo pagine, ordine e rotazione da uno o più file"),
+            multi=True)
+    p.add_argument("--pages", help=t("es. 1:1-3,2:4@90,1:5 (file:pagine@rotazione); senza: tutte le pagine in fila"))
+    p.add_argument("--bookmarks", action="store_true", help=t("un segnalibro per file"))
+    p.add_argument("--attachments", action="store_true", help=t("per le email: accoda anche gli allegati"))
+
     p = add("convert", cmd_convert, t("Converte in PDF: Word, Excel, PowerPoint, ODT, Markdown, testo, HTML, CSV, email, immagini"))
     p.add_argument("--attachments", action="store_true", help=t("per le email: accoda anche gli allegati"))
 
@@ -223,6 +229,34 @@ def cmd_split(args) -> int:
     print(t("{len} file in {outdir}:", len=len(written), outdir=outdir))
     for path in written:
         print(f"- {path.name}")
+    return EXIT_OK
+
+
+def cmd_assemble(args) -> int:
+    from wmt_pdf.convert import kind_of, to_pdf
+    from wmt_pdf.ops import Part, assemble, parse_sheets
+
+    files = [Path(f) for f in args.files]
+    target = Path(args.output)
+    check_target(target, files, args.force)
+    parts, notes, counts = [], [], []
+    for f in files:
+        if not f.is_file():
+            raise CliError(t("file non trovato: {f}", f=f))
+        kind_of(f)
+        converted = to_pdf(f, attachments=args.attachments)
+        notes += converted.notes
+        part = Part(Path(f.name.removesuffix(".p7m")).stem, converted.data, resolve_password(args))
+        parts.append(part)
+        counts.append(_count(part.data, part.password))
+    result = assemble(parts, parse_sheets(args.pages, counts), target, bookmarks=args.bookmarks)
+    print(t("{target}: {len} file, {pages} pagine, {kb}", target=target, len=len(parts), pages=result.pages,
+            kb=_kb(target.stat().st_size)))
+    if result.renamed_fields:
+        shown = ", ".join(result.renamed_fields[:10]) + (" …" if len(result.renamed_fields) > 10 else "")
+        notes.append(t("campi con lo stesso nome rinominati: {shown}", shown=shown))
+    for note in notes:
+        print(f"- {note}")
     return EXIT_OK
 
 

@@ -1,0 +1,56 @@
+/* «Organizza pagine»: griglia di miniature da riordinare, selezionare, ruotare ed eliminare. */
+.organize-view { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.org-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.org-heading h2 { margin: 0; }
+.org-heading p { margin: 2px 0 0; }
+.org-status { color: var(--accent); }
+.org-bar .tool-row { align-items: center; }
+.org-bar .tool-row .btn { flex: none; width: auto; white-space: nowrap; }
+.org-hint { margin: 0; font-size: 13px; }
+
+.org-grid {
+  max-height: calc(100vh - 230px); overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 18px; padding: 16px; align-content: start; background: var(--surface-2); border-radius: var(--radius);
+  min-height: 240px; user-select: none; -webkit-user-select: none;
+}
+.org-grid.drop-end { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.org-empty { margin: -200px auto 0; padding: 24px; text-align: center; color: var(--muted); pointer-events: none; }
+
+.org-card {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 8px;
+  border-radius: 12px; background: var(--surface); border: 2px solid transparent; cursor: grab;
+  box-shadow: var(--shadow);
+}
+.org-card:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.org-card.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.org-card.dragged { opacity: .35; }
+.org-card:active { cursor: grabbing; }
+
+/* Dove cadranno le pagine trascinate: una barra prima o dopo la scheda. */
+.org-card.drop-before::before, .org-card.drop-after::after {
+  content: ""; position: absolute; top: 6px; bottom: 6px; width: 4px; border-radius: 2px; background: var(--accent);
+}
+.org-card.drop-before::before { left: -12px; }
+.org-card.drop-after::after { right: -12px; }
+
+.org-thumb { height: 200px; width: 100%; display: flex; align-items: center; justify-content: center; }
+.org-thumb canvas { background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); max-width: 100%; max-height: 100%; }
+.org-label { display: flex; align-items: baseline; gap: 6px; max-width: 100%; font-size: 12px; }
+.org-n { font-weight: 700; }
+.org-src { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.org-tools {
+  position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; padding: 2px; border-radius: 8px;
+  background: var(--surface); box-shadow: var(--shadow); opacity: 0; transition: opacity .12s;
+}
+.org-card:hover .org-tools, .org-card:focus-within .org-tools { opacity: 1; }
+.org-tools button {
+  display: inline-flex; border: 0; background: none; color: var(--text); padding: 4px; border-radius: 6px; cursor: pointer;
+}
+.org-tools button:hover { background: var(--surface-2); }
+.org-tools svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.org-preview { padding: 0; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--text); max-width: 92vw; }
+.org-preview::backdrop { background: rgba(10, 14, 22, .6); }
+.org-preview-body { padding: 12px; display: flex; justify-content: center; background: var(--surface-2); }
+.org-preview-body canvas { background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .3); }

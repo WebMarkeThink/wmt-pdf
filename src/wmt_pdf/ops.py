@@ -183,6 +183,114 @@ def merge(parts: Iterable[Part], target: Path, bookmarks: bool = True) -> MergeR
         out.close()
 
 
+@dataclass
+class Sheet:
+    """Una pagina del PDF da comporre: da quale file (da 0), quale pagina (da 1), di quanto ruotarla in più."""
+
+    part: int
+    page: int
+    rotate: int = 0
+
+
+_SHEET = re.compile(r"(?:(\d+):)?(\d+)(?:-(\d+))?(?:@(-?\d+))?")
+
+
+def parse_sheets(spec: str | None, counts: list[int]) -> list[Sheet]:
+    """«1:1-3,2:4@90,1:5»: file:pagine@rotazione, nell'ordine; senza «file:» vale il primo. Vuoto: tutto in fila.
+
+    Gli intervalli all'indietro («1:5-3») vanno all'indietro, come in `pages --order`.
+    """
+    if not spec or not spec.strip():
+        return [Sheet(i, n) for i, count in enumerate(counts) for n in range(1, count + 1)]
+    sheets: list[Sheet] = []
+    for chunk in spec.replace(" ", "").split(","):
+        if not chunk:
+            continue
+        match = _SHEET.fullmatch(chunk)
+        if not match:
+            raise CliError(t("--pages: voce non valida «{chunk}» (es. 1:2-4@90)", chunk=chunk))
+        part = int(match[1] or 1) - 1
+        if not 0 <= part < len(counts):
+            raise CliError(t("--pages: file {n} inesistente (sono {count})", n=part + 1, count=len(counts)))
+        first, last = int(match[2]), int(match[3] or match[2])
+        for n in (first, last):
+            if not 1 <= n <= counts[part]:
+                raise CliError(t("--pages: il file {n} ha {count} pagine (chiesta la {page})", n=part + 1,
+                                 count=counts[part], page=n))
+        angle = int(match[4] or 0)
+        if angle % 90:
+            raise CliError(t("--pages: la rotazione dev'essere un multiplo di 90 («{chunk}»)", chunk=chunk))
+        step = 1 if last >= first else -1
+        sheets.extend(Sheet(part, n, angle % 360) for n in range(first, last + step, step))
+    if not sheets:
+        raise CliError(t("non resterebbe nessuna pagina"))
+    return sheets
+
+
+def assemble(parts: list[Part], sheets: list[Sheet], target: Path, bookmarks: bool = False) -> MergeResult:
+    """Un PDF con le pagine indicate, da uno o più file, nell'ordine dato e ruotate se serve; campi conservati.
+
+    I segnalibri che puntano a pagine rimaste restano; con `bookmarks` finiscono sotto un segnalibro per file.
+    """
+    out = pikepdf.new()
+    opened: list[pikepdf.Pdf] = []
+    protected: tuple[pikepdf.Pdf, str] | None = None
+    original_names: set[str] = set()
+    try:
+        for part in parts:
+            src = open_pdf(part.data, part.password)
+            opened.append(src)
+            if src.is_encrypted and part.password and protected is None:
+                protected = (src, part.password)
+            if "/AcroForm" in src.Root:
+                original_names |= {f.fully_qualified_name for f in src.acroform.fields}
+        maps: dict[int, dict[int, int]] = {}
+        run: list[Sheet] = []
+
+        def flush() -> None:
+            if not run:
+                return
+            start = len(out.pages)
+            page_map = copy_pages(out, opened[run[0].part], [s.page for s in run])
+            for offset, sheet in enumerate(run):
+                if sheet.rotate:
+                    out.pages[start + offset].rotate(sheet.rotate, relative=True)
+            for old, new in page_map.items():
+                maps.setdefault(run[0].part, {}).setdefault(old, new)
+            run.clear()
+
+        for sheet in sheets:  # pagine di seguito dallo stesso file: una sola copia, più veloce
+            if run and run[0].part != sheet.part:
+                flush()
+            run.append(sheet)
+        flush()
+        # Segnalibri dei file che puntano a pagine rimaste: sotto il segnalibro del file o, senza, così come sono.
+        tops = []
+        for index, part in enumerate(parts):
+            page_map = maps.get(index)
+            if not page_map:
+                continue  # nessuna pagina di questo file nel risultato
+            items = build_outline(read_outline(opened[index]), page_map)
+            if bookmarks:
+                node = pikepdf.OutlineItem(part.title, min(page_map.values()))
+                node.children.extend(items)
+                items = [node]
+            tops.extend((min(page_map.values()), i, item) for i, item in enumerate(items))
+        if tops:
+            with out.open_outline() as outline:
+                outline.root.extend(item for *_, item in sorted(tops, key=lambda row: row[:2]))
+        renamed = []
+        if "/AcroForm" in out.Root:
+            renamed = sorted(f.fully_qualified_name for f in out.acroform.fields
+                             if f.fully_qualified_name not in original_names)
+        save(out, target, source=protected[0] if protected else None, password=protected[1] if protected else None)
+        return MergeResult(len(out.pages), renamed)
+    finally:
+        for src in opened:
+            src.close()
+        out.close()
+
+
 def split_groups(count: int, every: int | None = None, ranges: str | None = None) -> list[list[int]]:
     if every:
         if every < 1:

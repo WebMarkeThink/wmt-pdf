@@ -43,10 +43,14 @@ Salva, Non salvare e Annulla. Riaprire un file già aperto riporta alla sua sche
   timbri, filigrane, evidenziazioni, note, campi dei moduli): clic per selezionarne uno, trascinamento per
   spostarlo, frecce per spostarlo di un punto (Maiusc: dieci), doppio clic su un testo per cambiarlo, Esc per
   deselezionare. Con «Modifica testo» il clic su un testo lo cambia o lo elimina; con «Aggiungi testo» si scrive
-  nel punto scelto. «Aggiungi file…» unisce al documento altri file (PDF, Word, Excel, immagini, email), all'inizio
-  o in fondo. Poi: ruota o elimina la pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti
+  nel punto scelto. «Organizza pagine…» mostra tutte le pagine in miniatura: si trascinano per cambiarne l'ordine
+  (anche più pagine selezionate insieme), si ruotano, si eliminano, si guardano in grande con un doppio clic e si
+  inseriscono pagine di altri file (PDF, Word, Excel, immagini, email) nel punto voluto; «Aggiungi file…» apre la
+  stessa vista con i file da inserire. Poi: ruota o elimina la pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti
   applicati al documento aperto. Ogni modifica è una versione: si annulla e si ripete. Miniature delle pagine a
   sinistra.
+- **Unisci**: i file scelti o trascinati compaiono come pagine in miniatura, da ordinare, ruotare o togliere prima di
+  creare il PDF, che si apre in una scheda nuova.
 - **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,
   proteggi e firma) per lavorare su uno o più file; i PDF risultanti si aprono come documento con «Apri».
 
@@ -93,6 +97,7 @@ Per i PDF protetti: `--password` oppure `--password-env NOME_VARIABILE` (non res
 |---|---|
 | `wpdf merge A B C... -o out.pdf` | unisce file anche di formati diversi, un segnalibro per file; `--attachments` accoda gli allegati delle email |
 | `wpdf convert FILE -o out.pdf` | da Word, Excel, PowerPoint, ODT, Markdown, testo, HTML, CSV, email `.eml`, immagini (TIFF multipagina compreso) |
+| `wpdf assemble A B... --pages "1:1-3,2:4@90,1:5" -o out.pdf` | compone un PDF scegliendo pagine, ordine e rotazione (`file:pagine@gradi`) da uno o più file |
 | `wpdf split FILE --every N` / `--ranges "1-3;4-"` `-o cartella` | divide in più file |
 | `wpdf pages FILE --keep 1-3` / `--delete 2` / `--order 3,1,2` | tiene, toglie o riordina pagine |
 | `wpdf rotate FILE --angle 90 [--pages 2]` | ruota |
@@ -148,7 +153,7 @@ oppure come `after`: un'etichetta del testo, e il campo va subito alla sua destr
 ]}
 ```
 
-`merge`, `pages` e `split` conservano campi e segnalibri; in `merge` i campi con lo stesso nome vengono rinominati
+`merge`, `assemble`, `pages` e `split` conservano campi e segnalibri; in `merge` i campi con lo stesso nome vengono rinominati
 (`nome`, `nome+1`) e i segnalibri di ogni file finiscono sotto il segnalibro del file. Con `pages --order` i segnalibri
 seguono il nuovo ordine delle pagine.
 

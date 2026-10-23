@@ -33,7 +33,9 @@ versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra
   «App predefinita per i PDF…» in basso a sinistra) e aprire i PDF con un doppio clic, anche con l'app già aperta.
 - **Seleziona**: spostare testi, immagini, firme e timbri trascinandoli; doppio clic su un testo per cambiarlo.
 - **Aggiungi testo**, cerca e sostituisci, evidenzia; **Annulla** e **Ripeti**; **Salva** e **Salva con nome**.
-- **Unisci** più file (anche Word, Excel, immagini, email) e **Aggiungi file…** al documento aperto.
+- **Organizza pagine…** nel documento: trascinare le miniature per riordinare (Ctrl o Maiusc per più pagine), ruotare,
+  eliminare con Canc, doppio clic per vedere la pagina in grande, inserire altri file nel punto voluto.
+- **Unisci** più file (anche Word, Excel, immagini, email): ordinare e togliere le pagine prima di creare il PDF.
 - Gli strumenti della griglia: comprimi, converti, esporta, OCR, filigrana, password, moduli.
 - Verifica di PDF firmati e di file `.p7m`; firma grafica.
 - **Compatta**: la barra sempre in primo piano su un lato dello schermo.

@@ -8,6 +8,7 @@ import {
   activateTab, activeTabId, closeTab, cycleTab, openTabs, pdfjs, redo, reopenDocument, save, saveAs,
   showOpenedDocument, undo,
 } from "./doc.js";
+import { initOrganizer, organizeDocument, organizeFiles } from "./organize.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
 const ICON_DOWN = '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>';
@@ -21,7 +22,7 @@ const state = {
 
 function show(view) {
   state.view = view;
-  for (const name of ["home", "tool", "doc"]) $(name).hidden = name !== view;
+  for (const name of ["home", "tool", "doc", "organize"]) $(name).hidden = name !== view;
   document.querySelector(".main").classList.toggle("doc-mode", view === "doc");
   document.body.classList.toggle("doc-open", view === "doc");
   if (view === "home") {
@@ -196,6 +197,7 @@ window.wpdfExternal = async (action) => {
   if (action.open_file) return openDocument({ file_id: action.open_file });
   if (action.notice) toast(action.notice);
   if (action.open_doc) return showOpenedDocument(action.open_doc);
+  if (action.tool === "merge") return organizeFiles(action.files || []); // dalla barra compatta
   const tool = state.tools.find((t) => t.id === action.tool);
   if (!tool) return undefined;
   openTool(tool);
@@ -245,6 +247,7 @@ function renderGrid() {
 // --- strumento ---------------------------------------------------------------------------------------
 
 function openTool(tool) {
+  if (tool.id === "merge") return organizeFiles([], state.view === "doc" ? "doc" : "home"); // si vedono e ordinano le pagine
   state.tool = tool;
   state.files = [];
   state.optionFiles = {};
@@ -459,10 +462,7 @@ function bindCommands() {
   $("cmd-save").addEventListener("click", save);
   $("cmd-saveas").addEventListener("click", saveAs);
   $("cmd-download").addEventListener("click", download);
-  $("cmd-merge").addEventListener("click", () => {
-    const merge = state.tools.find((t) => t.id === "merge");
-    if (merge) openTool(merge);
-  });
+  $("cmd-merge").addEventListener("click", () => organizeFiles([], state.view === "doc" ? "doc" : "home"));
   $("brand").addEventListener("click", () => {
     state.category = "tutti";
     show("home");
@@ -483,6 +483,8 @@ function bindCommands() {
     if (mod && key === "o") {
       event.preventDefault();
       openCommand();
+    } else if (state.view === "organize") {
+      // l'organizzatore ha le sue scorciatoie: qui niente che cambi o chiuda il documento sotto
     } else if (mod && key === "s") {
       event.preventDefault();
       if (event.shiftKey) saveAs();
@@ -543,7 +545,7 @@ function bindDrop() {
   document.addEventListener("dragover", (event) => event.preventDefault());
   document.addEventListener("drop", (event) => {
     event.preventDefault(); // sempre: altrimenti il browser apre il file e si perde la sessione
-    if (state.view === "tool") return;
+    if (state.view === "tool" || state.view === "organize") return;
     const file = event.dataTransfer.files[0];
     if (file) openUploaded(file);
   });
@@ -658,7 +660,8 @@ async function reopenAfterReload() {
 async function start() {
   await loadI18n();
   state.tools = await api("/api/tools");
-  initDocs({ show, updateBar, tools: () => state.tools });
+  initDocs({ show, updateBar, tools: () => state.tools, organize: organizeDocument });
+  initOrganizer({ show, tools: () => state.tools, view: () => state.view });
   $("search").addEventListener("input", renderGrid);
   $("back").addEventListener("click", () => show("home"));
   $("run").addEventListener("click", run);

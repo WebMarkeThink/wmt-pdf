@@ -83,6 +83,12 @@ _TOOLS = [
              Option("bookmarks", "Un segnalibro per file", "bool", "--no-bookmarks", default=True, negate=True),
              Option("attachments", "Per le email, accoda gli allegati", "bool", "--attachments"),
          )),
+    Tool("assemble", "assemble", "Organizza pagine", "Pagine scelte, ordinate e ruotate, da uno o più file",
+         "pages", "organizza", min_files=1, max_files=50, accept=tuple(ANY), suffix="organizzato", hidden=True,
+         options=(
+             Option("pages", "Pagine", "text", "--pages"),
+             Option("bookmarks", "Un segnalibro per file", "bool", "--bookmarks"),
+         )),
     Tool("split", "split", "Dividi", "Un file ogni N pagine o per intervalli", "split", "organizza", output="dir",
          one_of=("every", "ranges"), options=(
              Option("every", "Ogni quante pagine", "number", "--every"),
@@ -318,7 +324,8 @@ def build_args(tool: Tool, inputs: list[Path], options: dict, outdir: Path) -> t
     first = inputs[0]
     stem = _stem(first)
     if tool.output == "pdf":
-        name = f"{tool.suffix or stem}.pdf" if tool.id == "merge" else f"{stem}_{tool.suffix or 'pdf'}.pdf"
+        name = "unito.pdf" if tool.id in ("merge", "assemble") and len(inputs) > 1 \
+            else f"{stem}_{tool.suffix or 'pdf'}.pdf"
         flags.append(f"-o={outdir / name}")
     elif tool.output == "dir":
         flags.append(f"-o={outdir}")

@@ -7,6 +7,7 @@
   <title>wmt-pdf</title>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/doc.css">
+  <link rel="stylesheet" href="/static/organize.css">
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
@@ -155,6 +156,29 @@
           </section>
         </section>
 
+        <section id="organize" class="view organize-view" hidden>
+          <header class="org-bar">
+            <div class="org-heading">
+              <h2 id="org-title">Organizza pagine</h2>
+              <p class="muted"><span id="org-count"></span> <span id="org-status" class="org-status"></span></p>
+            </div>
+            <div class="tool-row">
+              <button class="btn" id="org-add" type="button" title="PDF, Word, Excel, immagini, email…">Aggiungi file…</button>
+              <button class="btn ghost" id="org-rotl" type="button" title="Ruota a sinistra le pagine selezionate">↺ Ruota</button>
+              <button class="btn ghost" id="org-rotr" type="button" title="Ruota a destra le pagine selezionate">Ruota ↻</button>
+              <button class="btn ghost" id="org-delete" type="button" title="Elimina le pagine selezionate (Canc)">Elimina</button>
+              <button class="btn ghost" id="org-all" type="button" title="Ctrl+A">Seleziona tutto</button>
+              <span class="bar-sep" aria-hidden="true"></span>
+              <button class="btn ghost" id="org-cancel" type="button">Annulla</button>
+              <button class="btn primary small-btn" id="org-apply" type="button">Applica</button>
+            </div>
+          </header>
+          <p class="org-hint muted">Trascina le pagine per cambiarne l'ordine (anche più pagine selezionate insieme) o i file dal computer nel punto in cui inserirli. Clic per selezionare, Ctrl o Maiusc per più pagine, doppio clic per vederla in grande, Canc per eliminare.</p>
+          <div id="org-grid" class="org-grid" role="listbox" aria-multiselectable="true" aria-label="Pagine"></div>
+          <p id="org-empty" class="org-empty" hidden>Trascina qui i file da unire, oppure usa «Aggiungi file…».</p>
+          <input id="org-input" type="file" multiple hidden>
+        </section>
+
         <section id="doc" class="view doc-view" hidden>
           <aside class="thumbs" id="thumbs" aria-label="Pagine"></aside>
           <div class="stage">
@@ -192,11 +216,13 @@
               <button class="btn" id="page-rotate" type="button">Ruota</button>
               <button class="btn" id="page-delete" type="button">Elimina</button>
             </div>
+            <button class="btn" id="page-organize" type="button" title="Riordina, ruota ed elimina le pagine trascinandole">
+              Organizza pagine…
+            </button>
             <h3>Unisci</h3>
             <div class="tool-row">
-              <button class="btn" id="doc-merge" type="button" title="PDF, Word, Excel, immagini, email…">Aggiungi file…</button>
+              <button class="btn" id="doc-merge" type="button" title="Inserisci pagine da altri file (PDF, Word, Excel, immagini, email…) dove vuoi">Aggiungi file…</button>
             </div>
-            <input id="merge-input" type="file" multiple hidden>
             <h3>Testo</h3>
             <form class="mini-form" id="find-form">
               <input id="find-text" type="text" placeholder="Cerca" required>
@@ -242,19 +268,12 @@
     </div>
   </dialog>
 
-  <dialog id="merge-dialog" class="tool-dialog" aria-labelledby="md-title">
-    <h2 id="md-title">Unisci al documento</h2>
-    <p class="muted">I file vengono convertiti in PDF se serve e uniti nell'ordine dell'elenco.</p>
-    <ol id="md-files" class="md-files"></ol>
-    <fieldset class="md-position">
-      <legend>Dove</legend>
-      <label class="check"><input type="radio" name="md-position" value="end" checked>In fondo al documento</label>
-      <label class="check"><input type="radio" name="md-position" value="start">All'inizio del documento</label>
-    </fieldset>
-    <div class="tool-row end">
-      <button class="btn ghost" id="md-cancel" type="button">Annulla</button>
-      <button class="btn primary small-btn" id="md-run" type="button">Unisci</button>
-    </div>
+  <dialog id="org-preview" class="org-preview" aria-labelledby="org-preview-title">
+    <header class="viewer-bar">
+      <strong id="org-preview-title" class="viewer-name"></strong>
+      <button class="btn" id="org-preview-close" type="button">Chiudi</button>
+    </header>
+    <div class="org-preview-body"><canvas id="org-preview-canvas"></canvas></div>
   </dialog>
 
   <dialog id="tool-dialog" class="tool-dialog" aria-labelledby="td-title">

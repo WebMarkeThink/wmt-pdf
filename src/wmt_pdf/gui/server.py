@@ -427,9 +427,11 @@ class Handler(BaseHTTPRequestHandler):
         if action == "apply":
             inputs = [doc.versions[doc.index]]
             extra, position = request.get("files"), request.get("position", "end")
-            if extra is not None:  # «Unisci»: altri file prima o dopo il documento aperto
-                if request.get("tool") != "merge" or not isinstance(extra, list) or position not in ("start", "end"):
-                    raise ValueError(t("file aggiunti ammessi solo per «Unisci», all'inizio o in fondo"))
+            if extra is not None:  # «Unisci» e «Organizza pagine»: altri file prima o dopo il documento aperto
+                # con «assemble» le pagine sono indicate per numero di file: il documento aperto dev'essere il primo
+                allowed = {"merge": ("start", "end"), "assemble": ("end",)}.get(request.get("tool"), ())
+                if not isinstance(extra, list) or position not in allowed:
+                    raise ValueError(t("file aggiunti ammessi solo per «Unisci» e «Organizza pagine»"))
                 for file_id in extra:
                     self.server.resolve(file_id)
                 inputs = extra + inputs if position == "start" else inputs + extra
