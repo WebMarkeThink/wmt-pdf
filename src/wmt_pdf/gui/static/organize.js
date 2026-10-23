@@ -67,16 +67,17 @@ export async function organizeDocument({ pickFiles = false } = {}) {
   if (pickFiles) $("org-input").click();
 }
 
-export async function organizeFiles(infos = [], back = "home") {
+// `title`: «Pagine» dalla griglia degli strumenti usa la stessa vista, con un file solo da sistemare.
+export async function organizeFiles(infos = [], back = "home", title = t("Unisci e organizza")) {
   if (org.busy) return;
-  await open("merge", back, infos);
+  await open("merge", back, infos, title);
 }
 
-async function open(mode, back, infos) {
+async function open(mode, back, infos, title = t("Organizza pagine")) {
   reset();
   org.mode = mode;
   org.back = back;
-  $("org-title").textContent = mode === "doc" ? t("Organizza pagine") : t("Unisci e organizza");
+  $("org-title").textContent = title;
   $("org-apply").textContent = mode === "doc" ? t("Applica al documento") : t("Crea il PDF");
   ctx.show("organize");
   await addInfos(infos, 0);

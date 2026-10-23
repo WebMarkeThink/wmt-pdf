@@ -247,7 +247,12 @@ function renderGrid() {
 // --- strumento ---------------------------------------------------------------------------------------
 
 function openTool(tool) {
-  if (tool.id === "merge") return organizeFiles([], state.view === "doc" ? "doc" : "home"); // si vedono e ordinano le pagine
+  // Unire e sistemare le pagine si fa vedendole: la griglia di miniature, non un modulo con i numeri di pagina.
+  if (tool.id === "merge") return organizeFiles([], state.view === "doc" ? "doc" : "home");
+  if (tool.id === "pages") {
+    if (state.view === "doc" && currentDoc()) return organizeDocument();
+    return organizeFiles([], state.view === "doc" ? "doc" : "home", t("Organizza pagine"));
+  }
   state.tool = tool;
   state.files = [];
   state.optionFiles = {};
