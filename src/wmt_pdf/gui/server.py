@@ -15,6 +15,7 @@ import io
 import json
 import mimetypes
 import os
+import queue
 import re
 import secrets
 import shutil
@@ -26,7 +27,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from wmt_pdf.gui.documents import DocumentStore, forget, recent, save_settings, settings
+from wmt_pdf.gui.documents import (
+    DocumentStore,
+    check_local_path,
+    forget,
+    recent,
+    save_settings,
+    settings,
+)
 from wmt_pdf.gui.tools import TOOLS, build_args, catalog
 from wmt_pdf.i18n import t
 from wmt_pdf.source import CliError
@@ -57,6 +65,33 @@ class GuiServer(ThreadingHTTPServer):
         self.desktop = False  # True nella finestra nativa: si possono aprire e salvare file per percorso
         self.language = "it"  # lingua dell'interfaccia e dei comandi che esegue (vedi set_language)
         self.desktop_api: Any = None  # DesktopApi della finestra nativa (per i file aperti da un secondo avvio)
+        # File arrivati da fuori (doppio clic): uno alla volta, da un solo thread. Due thread che toccano la finestra
+        # insieme la bloccavano (pywebview imposta alcune proprietà senza passare dal thread della finestra).
+        self._external: queue.Queue = queue.Queue()
+        self._external_worker: threading.Thread | None = None
+        self._external_lock = threading.Lock()  # non quello dei comandi: un OCR in corso non deve far aspettare
+
+    def enqueue_external(self, raw: str | None) -> None:
+        with self._external_lock:
+            if self._external_worker is None:
+                self._external_worker = threading.Thread(target=self._external_loop, daemon=True)
+                self._external_worker.start()
+        self._external.put(raw)
+
+    def _external_loop(self) -> None:
+        while True:
+            raw = self._external.get()
+            action = None
+            if raw is not None:
+                try:
+                    path = check_local_path(raw, for_open=True)  # prima i controlli, poi l'elenco dei permessi
+                    with self.documents.lock:
+                        self.documents.allow(str(path))  # scelto da chi ha fatto doppio clic sul file
+                        action = {"open_doc": self.documents.open_path(str(path)).id}
+                except (ValueError, OSError) as exc:
+                    action = {"notice": str(exc)}
+            with contextlib.suppress(Exception):  # finestra in chiusura proprio adesso: niente da mostrare
+                self.desktop_api._show_external(action)
 
     def register(self, path: Path) -> dict:
         file_id = uuid.uuid4().hex
@@ -328,18 +363,12 @@ class Handler(BaseHTTPRequestHandler):
         if not self.server.desktop or api is None:
             return self._error(400, t("disponibile solo nella finestra di wmt-pdf"))
         raw = request.get("path")
-        action = None
-        if raw is not None:
-            if not isinstance(raw, str):
-                return self._error(400, t("richiesta non valida"))
-            try:
-                with self.server.documents.lock:
-                    self.server.documents.allow(raw)  # scelto da chi ha fatto doppio clic sul file
-                    action = {"open_doc": self.server.documents.open_path(raw).id}
-            except (ValueError, OSError) as exc:
-                action = {"notice": str(exc)}
-        api._show_external(action)
-        return self._json(200, {"ok": True})
+        if raw is not None and not isinstance(raw, str):
+            return self._error(400, t("richiesta non valida"))
+        # Si risponde subito e si apre dopo: la finestra può essere ferma su una conferma o una finestra di dialogo,
+        # e chi ha fatto doppio clic non deve aspettarla (né, scaduta l'attesa, aprire un'altra finestra).
+        self.server.enqueue_external(raw)
+        return self._json(202, {"ok": True})
 
     def _upload(self, length: int) -> None:
         name = _safe_name(unquote(self.headers.get("X-File-Name", "file")))
@@ -440,9 +469,10 @@ def serve(workdir: Path, port: int = 0, open_window: bool = True, initial: str |
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     if initial:
         try:
+            path = check_local_path(initial, for_open=True)  # prima i controlli, poi l'elenco dei permessi
             with server.documents.lock:
-                server.documents.allow(initial)  # scelto da chi ha avviato il programma
-                url += f"?doc={server.documents.open_path(initial).id}"
+                server.documents.allow(str(path))  # scelto da chi ha avviato il programma
+                url += f"?doc={server.documents.open_path(str(path)).id}"
         except (ValueError, OSError) as exc:
             url += f"?notice={quote(str(exc))}"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -461,6 +491,7 @@ def serve(workdir: Path, port: int = 0, open_window: bool = True, initial: str |
                 api.attach_window(window)
                 server.desktop_api = api
                 instance.register(server.server_address[1], server.token)  # un secondo avvio passa qui il file
+                instance.release_startup()  # finestra pronta: gli avvii in attesa possono passarle i file
                 try:
                     webview.start()
                 finally:
@@ -489,6 +520,7 @@ class DesktopApi:
     _window: Any = None  # finestra di pywebview, assegnata dopo create_window
 
     _compact: Any = None  # barra compatta, quando c'è
+    _minimized = False  # finestra principale ridotta a icona
     _compact_lock = threading.RLock()  # un doppio clic su «Compatta» non deve aprire due barre
     _compact_place: tuple[Any, tuple[int, int, int, int]] | None = None  # (barra, misure) prima che compaia
 
@@ -501,6 +533,10 @@ class DesktopApi:
             return
         self._window = window
         window.events.closing += self._confirm_close
+        # Ridotta a icona o no: «restore» rimpicciolisce anche una finestra ingrandita, si usa solo se serve.
+        window.events.minimized += lambda: setattr(self, "_minimized", True)
+        window.events.restored += lambda: setattr(self, "_minimized", False)
+        window.events.maximized += lambda: setattr(self, "_minimized", False)
 
     def open_dialog(self):
         import webview
@@ -631,17 +667,24 @@ class DesktopApi:
         """Porta la finestra in primo piano (anche dalla barra compatta) ed esegue l'azione nella pagina."""
         from wmt_pdf.gui.compact import clean_action, run_action_js
 
-        if self._compact is not None:
+        with self._compact_lock:
+            compact_open = self._compact is not None
+        if compact_open:
             self.expand(action)
+            self._bring_front()
             return
-        self._window.restore()
-        self._window.show()
-        # Windows non lascia prendere il primo piano a chi non è in primo piano: un attimo «sempre sopra» lo forza.
-        self._window.on_top = True
-        self._window.on_top = False
+        self._bring_front()
         cleaned = clean_action(action, set(TOOLS))
         if cleaned:
             self._window.evaluate_js(run_action_js(cleaned))
+
+    def _bring_front(self) -> None:
+        # show() porta la finestra davanti (Activate): il secondo avvio le ha concesso il primo piano con
+        # AllowSetForegroundWindow. Niente trucchi con «sempre sopra»: pywebview lo imposta fuori dal thread della
+        # finestra e, con un'altra chiamata in corso, la bloccava.
+        if self._minimized:
+            self._window.restore()
+        self._window.show()
 
     def _compact_closed(self) -> None:
         # Chiusa con Alt+F4 o simili: la finestra principale non deve restare nascosta per sempre.

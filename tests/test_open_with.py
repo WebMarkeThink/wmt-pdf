@@ -26,9 +26,17 @@ def server(tmp_path, monkeypatch):
 class FakeApi:
     def __init__(self):
         self.actions = []
+        self.event = threading.Event()
 
     def _show_external(self, action):
         self.actions.append(action)
+        self.event.set()
+
+    def wait(self):
+        """L'apertura avviene dopo la risposta (202): si aspetta che arrivi alla finestra."""
+        assert self.event.wait(10), "nessuna azione arrivata alla finestra"
+        self.event.clear()
+        return self.actions[-1]
 
 
 def post_external(srv, body):
@@ -45,21 +53,26 @@ def post_external(srv, body):
 
 def test_external_opens_document_in_the_window(server, text_pdf):
     server.desktop, server.desktop_api = True, FakeApi()
-    assert post_external(server, {"path": str(text_pdf)}) == 200
-    action = server.desktop_api.actions[-1]
+    assert post_external(server, {"path": str(text_pdf)}) == 202
+    action = server.desktop_api.wait()
     doc = server.documents.get(action["open_doc"])
     assert doc.path == text_pdf.resolve() or doc.path == text_pdf
-    assert post_external(server, {"path": None}) == 200 and server.desktop_api.actions[-1] is None  # solo in primo piano
+    assert post_external(server, {"path": None}) == 202 and server.desktop_api.wait() is None  # solo in primo piano
 
 
 def test_external_bad_file_becomes_a_notice(server, tmp_path):
     server.desktop, server.desktop_api = True, FakeApi()
     not_pdf = tmp_path / "nota.pdf"
     not_pdf.write_text("non sono un PDF")
-    assert post_external(server, {"path": str(not_pdf)}) == 200
-    assert "PDF" in server.desktop_api.actions[-1]["notice"]
-    assert post_external(server, {"path": str(tmp_path / "manca.pdf")}) == 200
-    assert "notice" in server.desktop_api.actions[-1]
+    assert post_external(server, {"path": str(not_pdf)}) == 202
+    assert "PDF" in server.desktop_api.wait()["notice"]
+    assert post_external(server, {"path": str(tmp_path / "manca.pdf")}) == 202
+    assert "notice" in server.desktop_api.wait()
+    bat = tmp_path / "script.bat"
+    bat.write_text("echo")
+    assert post_external(server, {"path": str(bat)}) == 202
+    assert "notice" in server.desktop_api.wait()
+    assert not server.documents._is_allowed(bat)  # scartato prima di entrare tra i percorsi ammessi
 
 
 def test_external_only_in_the_native_window(server, text_pdf):
@@ -73,7 +86,7 @@ def test_forward_to_running_instance(server, text_pdf):
     assert not instance.forward(str(text_pdf))  # nessuna istanza registrata
     instance.register(server.server_address[1], server.token)
     assert instance.forward(str(text_pdf))
-    assert "open_doc" in server.desktop_api.actions[-1]
+    assert "open_doc" in server.desktop_api.wait()
     instance.unregister(server.server_address[1] + 1)  # di un'altra istanza: resta
     assert instance.forward(None)
     instance.unregister(server.server_address[1])
@@ -84,6 +97,8 @@ def test_forward_with_stale_file_starts_normally(tmp_path, monkeypatch):
     monkeypatch.setenv("WPDF_CACHE_DIR", str(tmp_path))
     instance.register(1, "token-vecchio")  # istanza chiusa male: la porta non risponde
     assert not instance.forward(None, timeout=0.5)
+    (tmp_path / "istanza.json").write_text(json.dumps({"port": 8765, "token": "x", "pid": 999_999_999}))
+    assert not instance.forward(None)  # processo che non c'è più: la porta potrebbe essere di altri
     (tmp_path / "istanza.json").write_text("rovinato")
     assert not instance.forward(None)
 
@@ -112,3 +127,56 @@ def test_actions_towards_the_page():
     assert clean_action({"open_doc": "abc123"}, set()) == {"open_doc": "abc123"}
     assert clean_action({"open_doc": "../x"}, set()) is None
     assert clean_action({"notice": "x" * 1000}, set()) == {"notice": "x" * 300}
+
+
+@pytest.mark.parametrize("raw", [
+    "\\\\server\\cartella\\x.pdf", "//server/cartella/x.pdf", "\\/server/cartella/x.pdf",
+    "/\\server\\cartella\\x.pdf",
+])
+def test_network_paths_refused(raw):
+    import sys
+
+    from wmt_pdf.gui.documents import _is_network, check_local_path
+
+    if sys.platform != "win32" and "\\" in raw.replace("\\\\", ""):
+        pytest.skip("barre rovesciate mescolate: solo Windows")
+    assert _is_network(raw)
+    with pytest.raises(ValueError):
+        check_local_path(raw, for_open=True)
+
+
+def test_startup_lock(tmp_path, monkeypatch):
+    import os
+    import time
+
+    monkeypatch.setenv("WPDF_CACHE_DIR", str(tmp_path))
+    assert instance.claim_startup()
+    assert not instance.claim_startup()  # un altro avvio contemporaneo aspetta
+    instance.release_startup()
+    assert instance.claim_startup()
+    old = time.time() - instance.STARTUP_STALE - 5
+    os.utime(tmp_path / "istanza.avvio", (old, old))  # lucchetto di un avvio fallito
+    assert instance.claim_startup()
+    instance.release_startup()
+    assert not instance.wait_and_forward(None, seconds=1)  # nessuno sta aprendo: si apre da soli
+
+
+def test_bring_front_keeps_maximized_window():
+    from wmt_pdf.gui.server import DesktopApi
+
+    class Window:
+        def __init__(self):
+            self.calls = []
+            self.on_top = False
+
+        def __getattr__(self, name):
+            return lambda *a: self.calls.append(name)
+
+    api = DesktopApi(server=None)
+    api._window = Window()
+    api._bring_front()
+    assert "restore" not in api._window.calls and "show" in api._window.calls  # ingrandita: resta com'è
+    assert api._window.on_top is False  # niente «sempre sopra» (bloccava la finestra)
+    api._minimized = True
+    api._bring_front()
+    assert "restore" in api._window.calls

@@ -319,7 +319,7 @@ def test_desktop_api_exposes_only_methods(server):
 
     class FakeWindow:
         class events:
-            closing = Event()
+            closing = minimized = restored = maximized = Event()
 
     api = DesktopApi(server)
     api.attach_window(FakeWindow())

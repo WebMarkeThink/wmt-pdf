@@ -178,12 +178,17 @@ def cmd_gui(args) -> int:
     from wmt_pdf.gui.server import serve
 
     # wmt-pdf già aperto: gli si passa il file (o lo si porta solo in primo piano) invece di aprire un'altra finestra.
-    if not args.no_window and not args.port and instance.forward(args.file):
+    single = not args.no_window and not args.port
+    if single and instance.forward(args.file):
+        return EXIT_OK
+    # Più PDF aperti insieme: solo il primo avvio apre la finestra, gli altri le passano il loro file.
+    if single and not instance.claim_startup() and instance.wait_and_forward(args.file):
         return EXIT_OK
     workdir = Path(tempfile.mkdtemp(prefix="wmt-pdf-"))
     try:
         serve(workdir, args.port, open_window=not args.no_window, initial=args.file)
     finally:
+        instance.release_startup()
         shutil.rmtree(workdir, ignore_errors=True)  # i file caricati e prodotti non restano sul disco
     return EXIT_OK
 

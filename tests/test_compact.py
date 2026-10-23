@@ -90,7 +90,8 @@ class FakeWindow:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
         self.x, self.y, self.width, self.height = 100, 100, 1280, 840
-        self.events = types.SimpleNamespace(closing=Event(), closed=Event(), loaded=Event())
+        self.events = types.SimpleNamespace(closing=Event(), closed=Event(), loaded=Event(), minimized=Event(),
+                                            restored=Event(), maximized=Event())
         self.calls = []
 
     def __getattr__(self, name):  # hide, show, destroy, resize, move, evaluate_js

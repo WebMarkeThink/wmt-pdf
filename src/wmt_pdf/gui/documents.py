@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import os
 import shutil
+import sys
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -105,10 +106,29 @@ def forget(path: str) -> None:
         target.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def _is_network(text: str) -> bool:
+    """Percorso di rete: \\\\server\\cartella in tutte le grafie (anche con / mescolate) o unità mappata in rete."""
+    if text.startswith(("\\\\", "//")):
+        return True
+    if sys.platform != "win32":
+        return False
+    import ntpath
+
+    drive = ntpath.splitdrive(text.replace("/", "\\"))[0]
+    if drive.startswith("\\\\"):
+        return True
+    if len(drive) == 2 and drive[1] == ":":
+        import ctypes
+
+        DRIVE_REMOTE = 4
+        return ctypes.windll.kernel32.GetDriveTypeW(drive + "\\") == DRIVE_REMOTE  # type: ignore[attr-defined]
+    return False
+
+
 def check_local_path(raw_path: str, for_open: bool) -> Path:
     """Solo percorsi locali assoluti; niente percorsi di rete (su Windows aprirli invia le credenziali)."""
     text = str(raw_path or "")
-    if text.startswith(("\\\\", "//")) or not text:
+    if not text or _is_network(text):
         raise ValueError(t("percorsi di rete non ammessi"))
     path = Path(text)
     if not path.is_absolute():
