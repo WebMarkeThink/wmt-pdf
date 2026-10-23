@@ -29,7 +29,7 @@ Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert,
 ## Interfaccia grafica
 
 ```bash
-uv run wpdf gui
+uv run wpdf gui              # oppure: uv run wpdf gui documento.pdf
 ```
 
 Due modi di lavorare, con la barra in alto sempre disponibile (Apri, Recenti, Unisci, Annulla, Ripeti, Salva,

@@ -18,6 +18,7 @@ import os
 import re
 import secrets
 import shutil
+import sys
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -55,6 +56,7 @@ class GuiServer(ThreadingHTTPServer):
         self.documents = DocumentStore(self)
         self.desktop = False  # True nella finestra nativa: si possono aprire e salvare file per percorso
         self.language = "it"  # lingua dell'interfaccia e dei comandi che esegue (vedi set_language)
+        self.desktop_api: Any = None  # DesktopApi della finestra nativa (per i file aperti da un secondo avvio)
 
     def register(self, path: Path) -> dict:
         file_id = uuid.uuid4().hex
@@ -303,6 +305,8 @@ class Handler(BaseHTTPRequestHandler):
                                                            request.get("options") or {}))
             if path.startswith("/api/doc"):
                 return self._doc_post(path, request)
+            if path == "/api/external":
+                return self._external(request)
             if path == "/api/settings":
                 values = save_settings(request)
                 self.server.set_language(values["language"])
@@ -317,6 +321,25 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as exc:  # disco: file bloccato, permessi, spazio
             return self._error(400, t("operazione sul disco non riuscita: {reason}", reason=exc.strerror or exc))
         return self._error(404, t("risorsa inesistente"))
+
+    def _external(self, request: dict) -> None:
+        """Da un secondo avvio (doppio clic su un altro PDF): apre il file qui e porta la finestra in primo piano."""
+        api = self.server.desktop_api
+        if not self.server.desktop or api is None:
+            return self._error(400, t("disponibile solo nella finestra di wmt-pdf"))
+        raw = request.get("path")
+        action = None
+        if raw is not None:
+            if not isinstance(raw, str):
+                return self._error(400, t("richiesta non valida"))
+            try:
+                with self.server.documents.lock:
+                    self.server.documents.allow(raw)  # scelto da chi ha fatto doppio clic sul file
+                    action = {"open_doc": self.server.documents.open_path(raw).id}
+            except (ValueError, OSError) as exc:
+                action = {"notice": str(exc)}
+        api._show_external(action)
+        return self._json(200, {"ok": True})
 
     def _upload(self, length: int) -> None:
         name = _safe_name(unquote(self.headers.get("X-File-Name", "file")))
@@ -404,10 +427,24 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, store.state(doc))
 
 
-def serve(workdir: Path, port: int = 0, open_window: bool = True) -> None:
-    """Avvia il server e apre l'interfaccia: finestra nativa se c'è pywebview, altrimenti il browser."""
+def serve(workdir: Path, port: int = 0, open_window: bool = True, initial: str | None = None) -> None:
+    """Avvia il server e apre l'interfaccia: finestra nativa se c'è pywebview, altrimenti il browser.
+
+    Con `initial` (il PDF su cui si è fatto doppio clic, o passato a `wpdf gui FILE`) si apre subito come documento.
+    """
+    from urllib.parse import quote
+
+    from wmt_pdf.gui import instance
+
     server = make_server(workdir, port)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
+    if initial:
+        try:
+            with server.documents.lock:
+                server.documents.allow(initial)  # scelto da chi ha avviato il programma
+                url += f"?doc={server.documents.open_path(initial).id}"
+        except (ValueError, OSError) as exc:
+            url += f"?notice={quote(str(exc))}"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     print(t("wmt-pdf: interfaccia su {url} (Ctrl+C per chiudere)", url=url))
@@ -422,7 +459,12 @@ def serve(workdir: Path, port: int = 0, open_window: bool = True) -> None:
                 window = webview.create_window("wmt-pdf", url, width=1280, height=840, min_size=(900, 600),
                                                js_api=api)
                 api.attach_window(window)
-                webview.start()
+                server.desktop_api = api
+                instance.register(server.server_address[1], server.token)  # un secondo avvio passa qui il file
+                try:
+                    webview.start()
+                finally:
+                    instance.unregister(server.server_address[1])
                 return
             except ImportError:
                 import webbrowser
@@ -470,6 +512,13 @@ class DesktopApi:
         path = str(result[0])
         self._server.documents.allow(path)
         return path
+
+    def open_default_apps(self) -> bool:
+        """Windows: apre Impostazioni → App predefinite su wmt-pdf (un'app non può rendersi predefinita da sola)."""
+        if sys.platform != "win32":
+            return False
+        os.startfile("ms-settings:defaultapps?registeredAppUser=wmt-pdf")  # type: ignore[attr-defined]
+        return True
 
     def open_url(self, url: str) -> bool:
         """Apre nel browser la pagina di una release (solo quelle di wmt-pdf)."""
@@ -577,6 +626,22 @@ class DesktopApi:
             bar.resize(width, height)
             bar.move(x, y)
             bar.show()
+
+    def _show_external(self, action) -> None:
+        """Porta la finestra in primo piano (anche dalla barra compatta) ed esegue l'azione nella pagina."""
+        from wmt_pdf.gui.compact import clean_action, run_action_js
+
+        if self._compact is not None:
+            self.expand(action)
+            return
+        self._window.restore()
+        self._window.show()
+        # Windows non lascia prendere il primo piano a chi non è in primo piano: un attimo «sempre sopra» lo forza.
+        self._window.on_top = True
+        self._window.on_top = False
+        cleaned = clean_action(action, set(TOOLS))
+        if cleaned:
+            self._window.evaluate_js(run_action_js(cleaned))
 
     def _compact_closed(self) -> None:
         # Chiusa con Alt+F4 o simili: la finestra principale non deve restare nascosta per sempre.

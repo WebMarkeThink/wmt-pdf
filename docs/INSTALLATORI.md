@@ -14,6 +14,12 @@ comando `wpdf` per il terminale e per Claude Code. Non serve Python né uv. Su L
    l'icona nel menu Start. L'opzione «Aggiungi il comando wpdf al PATH» (attiva di default) rende disponibile
    `wpdf` in ogni terminale aperto dopo l'installazione.
 
+L'installatore registra wmt-pdf per i file PDF e `.p7m`: compare in **Apri con** e in Impostazioni → App
+predefinite. Windows non permette a nessun programma di rendersi predefinito da solo: si sceglie una volta, con
+l'opzione alla fine dell'installazione («Scegli wmt-pdf come app predefinita per i PDF»), da **App predefinita per
+i PDF…** in basso a sinistra nell'app, oppure con clic destro su un PDF → Apri con → Scegli un'altra app → wmt-pdf
+→ Sempre. Da lì il doppio clic su un PDF lo apre in wmt-pdf; se è già aperto, il file arriva nella stessa finestra.
+
 Serve WebView2, il motore di Edge, già presente in Windows 11 e nei Windows 10 aggiornati.
 Si disinstalla da Impostazioni → App, che toglie anche `wpdf` dal PATH.
 

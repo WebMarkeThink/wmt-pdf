@@ -5,7 +5,7 @@ import {
 } from "./common.js";
 import {
   PDF_OPTIONS, clearSelection, closeDocument, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav,
-  pdfjs, redo, reopenDocument, save, saveAs, undo,
+  pdfjs, redo, reopenDocument, save, saveAs, showOpenedDocument, undo,
 } from "./doc.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -162,6 +162,8 @@ window.wpdfExternal = async (action) => {
     return toggleRecentMenu();
   }
   if (action.open_file) return openDocument({ file_id: action.open_file });
+  if (action.notice) toast(action.notice);
+  if (action.open_doc) return showOpenedDocument(action.open_doc);
   const tool = state.tools.find((t) => t.id === action.tool);
   if (!tool) return undefined;
   openTool(tool);
@@ -585,6 +587,27 @@ async function bindUpdates() {
   checkUpdate(); // in sottofondo: l'interfaccia non aspetta GitHub
 }
 
+// PDF aperto con un doppio clic (o con `wpdf gui FILE`): il server lo ha già aperto e lo indica nell'indirizzo.
+async function openFromLaunch() {
+  const params = new URLSearchParams(location.search);
+  const id = params.get("doc");
+  const notice = params.get("notice");
+  if (id || notice) history.replaceState(null, "", "/"); // ricaricando non si riapre
+  if (notice) toast(notice);
+  if (id) await reopenDocument(id).catch((error) => toast(error.message));
+}
+
+// Windows: Impostazioni → App predefinite (un'app non può rendersi predefinita da sola).
+function bindDefaultApp() {
+  const button = $("default-app");
+  const refresh = () => {
+    button.hidden = !(window.pywebview?.api?.open_default_apps && navigator.userAgent.includes("Windows"));
+  };
+  refresh();
+  window.addEventListener("pywebviewready", refresh);
+  button.addEventListener("click", () => window.pywebview?.api?.open_default_apps());
+}
+
 async function reopenAfterReload() {
   let id = null;
   try {
@@ -609,8 +632,10 @@ async function start() {
   bindViewer();
   bindLanguage();
   bindUpdates();
+  bindDefaultApp();
   show("home");
   await reopenAfterReload();
+  await openFromLaunch();
 }
 
 start().catch((error) => toast(t("Avvio non riuscito: {error}", { error: error.message })));

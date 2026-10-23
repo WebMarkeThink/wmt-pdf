@@ -85,6 +85,10 @@ def clean_action(action: Any, tool_ids: set[str]) -> dict | None:
         result["tool"] = action["tool"]
     if isinstance(action.get("open_file"), str) and action["open_file"].isalnum():
         result["open_file"] = action["open_file"]
+    if isinstance(action.get("open_doc"), str) and action["open_doc"].isalnum():
+        result["open_doc"] = action["open_doc"][:64]  # documento già aperto sul server (doppio clic su un PDF)
+    if isinstance(action.get("notice"), str) and action["notice"].strip():
+        result["notice"] = action["notice"][:300]  # messaggio da mostrare (finisce in textContent)
     files = action.get("files")
     if isinstance(files, list):
         result["files"] = []

@@ -141,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("gui", help=t("Apre l'interfaccia grafica"), description=t("Apre l'interfaccia grafica"))
     p.add_argument("--port", type=int, default=0, help=t("porta locale (di default una libera)"))
     p.add_argument("--no-window", action="store_true", help=t("non aprire finestra né browser (solo server)"))
+    p.add_argument("file", nargs="?", help=t("PDF o .p7m da aprire subito"))
     p.set_defaults(func=cmd_gui)
 
     p = sub.add_parser("update", help=t("Controlla se c'è una versione nuova di wmt-pdf"),
@@ -173,11 +174,15 @@ def cmd_gui(args) -> int:
     import shutil
     import tempfile
 
+    from wmt_pdf.gui import instance
     from wmt_pdf.gui.server import serve
 
+    # wmt-pdf già aperto: gli si passa il file (o lo si porta solo in primo piano) invece di aprire un'altra finestra.
+    if not args.no_window and not args.port and instance.forward(args.file):
+        return EXIT_OK
     workdir = Path(tempfile.mkdtemp(prefix="wmt-pdf-"))
     try:
-        serve(workdir, args.port, open_window=not args.no_window)
+        serve(workdir, args.port, open_window=not args.no_window, initial=args.file)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)  # i file caricati e prodotti non restano sul disco
     return EXIT_OK

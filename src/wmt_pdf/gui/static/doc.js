@@ -84,6 +84,18 @@ export async function openDocument(body) {
   }
 }
 
+// Documento aperto dal server per un doppio clic su un PDF (con wmt-pdf già aperto): se quello aperto qui ha
+// modifiche non salvate si chiede prima; se si rinuncia, il nuovo si richiude.
+export async function showOpenedDocument(id) {
+  if (doc.state?.modified && doc.state.id !== id &&
+      !window.confirm(t("«{name}» ha modifiche non salvate. Vuoi aprire un altro documento e perderle?",
+        { name: doc.state.name }))) {
+    await post(`/api/doc/${id}/close`).catch(() => {});
+    return;
+  }
+  await reopenDocument(id).catch((error) => toast(error.message));
+}
+
 // Dopo un ricaricamento della pagina (es. cambio di lingua): il documento è ancora aperto sul server.
 export async function reopenDocument(id) {
   const state = await api(`/api/doc/${id}`);

@@ -28,6 +28,8 @@ versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra
 ## Cosa provare
 
 - Aprire PDF diversi (fatture, contratti, scansioni) e scorrere le pagine.
+- Su Windows: scegliere wmt-pdf come app predefinita per i PDF (opzione alla fine dell'installazione, oppure
+  «App predefinita per i PDF…» in basso a sinistra) e aprire i PDF con un doppio clic, anche con l'app già aperta.
 - **Seleziona**: spostare testi, immagini, firme e timbri trascinandoli; doppio clic su un testo per cambiarlo.
 - **Aggiungi testo**, cerca e sostituisci, evidenzia; **Annulla** e **Ripeti**; **Salva** e **Salva con nome**.
 - **Unisci** più file (anche Word, Excel, immagini, email) e **Aggiungi file…** al documento aperto.
