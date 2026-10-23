@@ -192,3 +192,25 @@ body.doc-open .sidebar { display: none; }
 .page-holder canvas { -webkit-user-drag: none; }
 .doc-tab:not(.active) .doc-tab-name { font-weight: 500; color: var(--muted); }
 .doc-tab:not(.active):hover .doc-tab-name { color: var(--text); }
+
+/* Campi del modulo: veri campi sopra la pagina, evidenziati come in Acrobat (si può togliere l'evidenziazione). */
+.field-layer { position: absolute; inset: 0; pointer-events: none; color-scheme: light; } /* la pagina è sempre chiara */
+/* Fondo pieno: copre l'aspetto disegnato sulla pagina, che mostra ancora il valore salvato. */
+.field-layer .field-box {
+  position: absolute; pointer-events: auto; display: flex; align-items: center; justify-content: center;
+  background: #dfe6ff;
+}
+.field-layer.plain .field-box:not(:focus-within):not(:hover) { background: #fff; }
+.field-layer .field-box:hover { box-shadow: inset 0 0 0 1px #3f63d8; }
+.field-layer .field-box:focus-within { background: #cdd8ff; box-shadow: inset 0 0 0 2px #3f63d8; }
+.field-layer .field {
+  box-sizing: border-box; width: 100%; height: 100%; margin: 0; padding: 0 2px; border: 0; border-radius: 0;
+  background: transparent; color: #000; font-family: Helvetica, Arial, sans-serif; line-height: 1.1;
+  outline: none; resize: none;
+}
+.field-layer .field:disabled { color: #333; }
+.field-layer .field-checkbox, .field-layer .field-radio {
+  width: auto; height: 80%; aspect-ratio: 1; max-width: 100%; padding: 0; accent-color: #1b2a5c; cursor: pointer;
+}
+.field-layer .field-textarea { padding-top: 1px; }
+.form-info { margin: 0 0 8px; font-size: 13px; }

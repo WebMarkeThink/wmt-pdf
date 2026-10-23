@@ -207,10 +207,20 @@
               <div class="page-holder" id="page-holder">
                 <canvas id="doc-canvas"></canvas>
                 <div class="overlay" id="overlay"></div>
+                <div class="field-layer" id="field-layer"></div>
               </div>
             </div>
           </div>
           <aside class="doc-tools" aria-label="Strumenti del documento">
+            <div id="doc-form" hidden>
+              <h3>Modulo</h3>
+              <p id="form-info" class="muted form-info"></p>
+              <div class="tool-row">
+                <button class="btn primary small-btn" id="form-apply" type="button" title="I valori scritti diventano una versione nuova del documento">Applica i campi</button>
+                <button class="btn ghost" id="form-reset" type="button">Annulla</button>
+              </div>
+              <label class="check"><input type="checkbox" id="form-highlight" checked> Evidenzia i campi</label>
+            </div>
             <h3>Pagina</h3>
             <div class="tool-row">
               <button class="btn" id="page-rotate" type="button">Ruota</button>

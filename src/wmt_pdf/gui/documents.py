@@ -28,6 +28,7 @@ class Document:
     index: int = 0
     saved_index: int = 0
     origin: str | None = None  # file caricato da cui è stato aperto: non è del documento, resta alla chiusura
+    pending_fields: int = 0  # campi scritti nella pagina e non ancora applicati (li tiene l'interfaccia)
 
 
 def _recent_path() -> Path:

@@ -36,6 +36,8 @@ versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra
 - **Organizza pagine…** nel documento: trascinare le miniature per riordinare (Ctrl o Maiusc per più pagine), ruotare,
   eliminare con Canc, doppio clic per vedere la pagina in grande, inserire altri file nel punto voluto.
 - **Unisci** più file (anche Word, Excel, immagini, email): ordinare e togliere le pagine prima di creare il PDF.
+- **Moduli**: aprire un PDF con campi, scrivere direttamente nei campi (testo, caselle, scelte), cambiare pagina e
+  tornare, poi «Applica i campi» o «Salva».
 - Gli strumenti della griglia: comprimi, converti, esporta, OCR, filigrana, password, moduli.
 - Verifica di PDF firmati e di file `.p7m`; firma grafica.
 - **Compatta**: la barra sempre in primo piano su un lato dello schermo.

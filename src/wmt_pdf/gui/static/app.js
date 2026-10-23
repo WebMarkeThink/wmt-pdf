@@ -8,6 +8,7 @@ import {
   activateTab, activeTabId, closeTab, cycleTab, openTabs, pdfjs, redo, reopenDocument, save, saveAs,
   showOpenedDocument, undo,
 } from "./doc.js";
+import { pendingFields } from "./fields.js";
 import { initOrganizer, organizeDocument, organizeFiles } from "./organize.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -50,7 +51,7 @@ function renderTabs() {
     name.textContent = item.name;
     name.addEventListener("click", () => activateTab(item.id));
     tab.append(name);
-    if (item.modified) tab.append(el("span", { class: "doc-dirty", title: t("Modifiche non salvate") }, "●"));
+    if (item.modified || pendingFields(item.id)) tab.append(el("span", { class: "doc-dirty", title: t("Modifiche non salvate") }, "●"));
     const close = el("button", { class: "doc-close", type: "button", title: t("Chiudi il documento (Ctrl+W)"),
       "aria-label": t("Chiudi il documento") }, CLOSE_ICON);
     close.addEventListener("click", (event) => {
@@ -75,7 +76,7 @@ function updateBar() {
   $("cmd-undo").disabled = !doc?.can_undo;
   $("cmd-redo").disabled = !doc?.can_redo;
   for (const id of ["cmd-save", "cmd-saveas", "cmd-download"]) $(id).disabled = !doc;
-  document.title = doc ? `${doc.modified ? "• " : ""}${doc.name} - wmt-pdf` : "wmt-pdf";
+  document.title = doc ? `${doc.modified || pendingFields(doc.id) ? "• " : ""}${doc.name} - wmt-pdf` : "wmt-pdf";
 }
 
 // --- apertura e file recenti -----------------------------------------------------------------
@@ -522,7 +523,7 @@ function bindCommands() {
     }
   });
   window.addEventListener("beforeunload", (event) => {
-    if (currentDoc()?.modified) event.preventDefault(); // il browser chiede conferma prima di perdere le modifiche
+    if (currentDoc()?.modified || openTabs().some((s) => pendingFields(s.id))) event.preventDefault(); // il browser chiede conferma prima di perdere le modifiche
   });
 }
 

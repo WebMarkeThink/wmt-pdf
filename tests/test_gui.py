@@ -365,3 +365,12 @@ def test_document_close(server, text_pdf, cache):
     assert status == 400  # il documento non c'è più
     assert call(server, "GET", f"/api/file/{edited}")[0] != 200  # versioni intermedie tolte
     assert call(server, "GET", f"/api/file/{file_id}")[0] == 200  # il file caricato resta (es. «Apri» dai risultati)
+
+
+def test_pending_fields_count_as_unsaved(server, text_pdf, cache):
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    status, _ = post(server, f"/api/doc/{doc['id']}/pending", {"count": 3})
+    assert status == 200
+    assert server.documents.get(doc["id"]).pending_fields == 3
+    status, _ = post(server, f"/api/doc/{doc['id']}/pending", {"count": "molti"})
+    assert status == 400

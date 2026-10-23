@@ -212,7 +212,12 @@ def _set(f, name: str, value) -> None:
         text = "" if value is None else str(value)
         if f.max_length and len(text) > f.max_length:
             raise CliError(t("«{name}»: al massimo {max_length} caratteri", name=name, max_length=f.max_length))
-        f.value = text
+        try:
+            f.value = text
+        except AttributeError:
+            # pikepdf non disegna i campi su più righe con un font standard senza /FontDescriptor (moduli fatti
+            # con ReportLab, per esempio): il valore si scrive lo stesso, l'aspetto lo rifà refresh_text_appearances.
+            f._field.set_value(text, False)
     elif isinstance(f, SignatureField):
         raise CliError(t("«{name}» è un campo firma: si compila firmando (fase firme), non con fill", name=name))
     else:

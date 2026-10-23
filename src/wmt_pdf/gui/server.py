@@ -442,6 +442,12 @@ class Handler(BaseHTTPRequestHandler):
                 result["outputs"] = []
             result["document"] = store.state(doc)
             return self._json(200, result)
+        if action == "pending":  # per la domanda alla chiusura della finestra (_confirm_close)
+            count = request.get("count")
+            if not isinstance(count, int) or count < 0:
+                raise ValueError(t("richiesta non valida"))
+            doc.pending_fields = count
+            return self._json(200, {"pending": count})
         if action == "close":
             store.close(doc)
             return self._json(200, {"closed": True})
@@ -698,7 +704,7 @@ class DesktopApi:
     def _confirm_close(self):
         """Alla chiusura della finestra, conferma se ci sono modifiche non salvate (False annulla la chiusura)."""
         store = self._server.documents
-        unsaved = [d.name for d in store.docs.values() if d.index != d.saved_index]
+        unsaved = [d.name for d in store.docs.values() if d.index != d.saved_index or d.pending_fields]
         if not unsaved:
             return True
         return self._window.create_confirmation_dialog(

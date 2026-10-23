@@ -3,6 +3,7 @@ import * as pdfjs from "/static/vendor/pdf.min.mjs";
 import {
   $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, t, toast,
 } from "./common.js";
+import { applyFields, drawFields, forgetFields, initFields, loadFields, pageWidgets, pendingFields } from "./fields.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.min.mjs";
 const VENDOR = "/static/vendor/";
@@ -56,6 +57,7 @@ export function initDocs(context) {
   $("td-run").addEventListener("click", runDialogTool);
   window.addEventListener("resize", closePopover);
   renderToolList();
+  initFields({ apply, message, updateBar: () => ctx.updateBar(), redraw: () => drawPage(), currentId: () => doc.state?.id });
 }
 
 // --- apertura e caricamento ---------------------------------------------------------------
@@ -144,6 +146,7 @@ async function load(state) {
   doc.loading = pdfjs.getDocument({ data, ...PDF_OPTIONS });
   doc.pdf = await doc.loading.promise;
   doc.page = Math.min(Math.max(1, doc.page), doc.pdf.numPages);
+  loadFields(state, doc.pdf); // il conteggio dei campi prosegue mentre la pagina si disegna
   ctx.updateBar();
   await drawPage();
   renderThumbs();
@@ -162,6 +165,7 @@ async function drawPage() {
     await previous.promise.catch(() => {});
   }
   const page = await doc.pdf.getPage(doc.page);
+  const widgets = await pageWidgets(page).catch(() => []);
   if (run !== doc.drawRun) return; // nel frattempo è partito un disegno più recente
   const viewport = page.getViewport({ scale: doc.scale });
   doc.viewport = viewport;
@@ -186,6 +190,7 @@ async function drawPage() {
   } finally {
     if (doc.task === task) doc.task = null;
   }
+  drawFields(widgets, viewport);
   $("doc-page").textContent = `${doc.page} / ${doc.pdf.numPages}`;
   $("doc-zoom").textContent = `${Math.round(doc.scale * 100)}%`;
   document.querySelectorAll(".thumb").forEach((t) => t.setAttribute("aria-current", String(Number(t.dataset.page) === doc.page)));
@@ -500,8 +505,10 @@ function message(text, isError = false) {
   box.classList.toggle("error", isError);
 }
 
+// Vero se il documento ha una versione nuova.
 export async function apply(tool, options, extra = {}) {
-  if (!doc.state || doc.busy) return;
+  if (!doc.state || doc.busy) return false;
+  let changed = false;
   doc.busy = true;
   message(t("Elaborazione…"));
   try {
@@ -509,7 +516,7 @@ export async function apply(tool, options, extra = {}) {
     // Nel documento il nome del file intermedio non interessa: resta solo cosa è successo.
     const text = `${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}`
       .replace(/^wpdf: /gm, "").replace(/^[^\n:]+\.pdf: /gm, "").trim();
-    const changed = result.document.version !== doc.state.version;
+    changed = result.document.version !== doc.state.version;
     message(text, result.code !== 0 && ![2, 3].includes(result.code));
     if (result.outputs?.length) showOutputs(result.outputs);
     if (changed) await load(result.document);
@@ -522,6 +529,7 @@ export async function apply(tool, options, extra = {}) {
   } finally {
     doc.busy = false;
   }
+  return changed;
 }
 
 function showOutputs(outputs) {
@@ -564,8 +572,15 @@ export async function redo() {
 }
 
 // Vero se il documento è stato salvato (o, nel browser, scaricato).
+// I campi scritti si salvano con il resto; se non si possono applicare (PDF firmato, campi fuori dal modulo…)
+// si chiede se salvare lo stesso senza.
+async function fieldsBeforeSave() {
+  return (await applyFields())
+    || window.confirm(t("I campi scritti non si possono applicare (vedi il messaggio). Salvare il documento senza?"));
+}
+
 export async function save() {
-  if (!doc.state) return false;
+  if (!doc.state || !(await fieldsBeforeSave())) return false;
   const pdfPath = doc.state.path && doc.state.path.toLowerCase().endsWith(".pdf");
   if (desktop() && pdfPath) { // un .p7m non si riscrive: la firma andrebbe persa
     try {
@@ -582,7 +597,7 @@ export async function save() {
 }
 
 export async function saveAs() {
-  if (!doc.state) return false;
+  if (!doc.state || !(await fieldsBeforeSave())) return false;
   if (!desktop()) {
     try {
       await downloadFile(doc.state.file_id, doc.state.name);
@@ -636,7 +651,7 @@ function askClose() {
 // Chiude il documento aperto; con modifiche non salvate chiede prima. Vero se è stato chiuso.
 export async function closeDocument() {
   if (!doc.state || doc.busy) return false;
-  if (doc.state.modified) {
+  if (doc.state.modified || pendingFields(doc.state.id)) {
     const choice = await askClose();
     if (choice === "cancel" || (choice === "save" && !(await save()))) return false;
   }
@@ -647,6 +662,7 @@ export async function closeDocument() {
     // già sparito dal server (es. riavviato): si chiude comunque la vista
   }
   closePopover();
+  forgetFields(closing.id);
   const index = tabs.findIndex((tab) => tab.id === closing.id);
   if (index >= 0) tabs.splice(index, 1);
   const next = tabs[Math.min(Math.max(index, 0), tabs.length - 1)];

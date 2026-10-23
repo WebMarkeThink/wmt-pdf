@@ -424,3 +424,21 @@ def test_empty_data_rejected(capsys, tmp_path, form_pdf):
     data = _json(tmp_path, "d.json", [])
     code, _, err = run(capsys, "fill", form_pdf, "--data", data, "-o", tmp_path / "out")
     assert code == 1 and "nessun dato" in err
+
+
+def test_fill_multiline_with_standard_font(capsys, tmp_path):
+    # Campo su più righe con Helvetica senza /FontDescriptor (ReportLab): pikepdf non ne disegna l'aspetto.
+    path = tmp_path / "note.pdf"
+    c = canvas.Canvas(str(path), pagesize=A4)
+    c.acroForm.textfield(name="note", x=100, y=600, width=250, height=70, fieldFlags="multiline")
+    c.showPage()
+    c.save()
+    data = tmp_path / "dati.json"
+    data.write_text(json.dumps({"note": "riga uno\nriga due"}), encoding="utf-8")
+    out = tmp_path / "compilato.pdf"
+    code, _, err = run(capsys, "fill", path, "--data", data, "-o", out)
+    assert code == 0, err
+    assert fields_of(capsys, out)["note"]["value"] == "riga uno\nriga due"
+    with pikepdf.open(out) as pdf:
+        widget = next(a for a in pdf.pages[0].obj.Annots if str(a.get("/T", "")) == "note")
+        assert b"(riga due) Tj" in widget.AP.N.read_bytes()

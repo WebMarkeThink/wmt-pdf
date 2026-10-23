@@ -48,7 +48,8 @@ Salva, Non salvare e Annulla. Riaprire un file già aperto riporta alla sua sche
   inseriscono pagine di altri file (PDF, Word, Excel, immagini, email) nel punto voluto; «Aggiungi file…» apre la
   stessa vista con i file da inserire. Poi: ruota o elimina la pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti
   applicati al documento aperto. Ogni modifica è una versione: si annulla e si ripete. Miniature delle pagine a
-  sinistra.
+  sinistra. Nei PDF con campi (moduli) si scrive direttamente nei campi sulla pagina, caselle e scelte comprese;
+  «Applica i campi» li salva come versione nuova, e «Salva» li applica da solo.
 - **Unisci**: i file scelti o trascinati compaiono come pagine in miniatura, da ordinare, ruotare o togliere prima di
   creare il PDF, che si apre in una scheda nuova.
 - **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,
