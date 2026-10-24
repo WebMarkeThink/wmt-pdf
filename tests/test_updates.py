@@ -191,3 +191,16 @@ def test_github_prerelease_flag_counts():
 ])
 def test_release_url_allowlist(url):
     assert not updates.is_release_url(url)
+
+
+@pytest.mark.parametrize("url, ok", [
+    ("https://github.com/WebMarkeThink/wmt-pdf", True),
+    ("https://github.com/WebMarkeThink/wmt-pdf/blob/master/LICENSE", True),
+    ("https://github.com/WebMarkeThink/wmt-pdf/issues", True),
+    ("https://github.com/WebMarkeThink/wmt-pdf/releases/tag/v0.1.0-beta.6", True),
+    ("https://github.com/WebMarkeThink/wmt-pdf/blob/master/LICENSE/../../evil", False),
+    ("https://github.com/WebMarkeThink/wmt-pdf.evil.com", False),
+    ("file:///C:/Windows", False),
+])
+def test_project_pages_allowlist(url, ok):
+    assert updates.is_project_url(url) is ok

@@ -179,18 +179,39 @@ def _safe_name(name: str) -> str:
     return base[:150] or "file"
 
 
-def update_status() -> dict:
-    """Per l'interfaccia: c'è una versione nuova? Rispetta l'impostazione e WPDF_NO_UPDATE_CHECK."""
+def update_status(now: bool = False) -> dict:
+    """Per l'interfaccia: c'è una versione nuova? Rispetta l'impostazione e WPDF_NO_UPDATE_CHECK.
+
+    Con `now` (menu Aiuto → Cerca aggiornamenti) si chiede a GitHub subito, anche col controllo automatico spento,
+    e un errore di rete si riporta: l'ha chiesto l'utente.
+    """
     from dataclasses import asdict
 
     from wmt_pdf.updates import check, disabled_by_env
 
-    if disabled_by_env() or not settings()["update_check"]:
+    if disabled_by_env() or not (now or settings()["update_check"]):
         return {"enabled": False}
     try:
-        return {"enabled": True} | asdict(check())
-    except Exception:  # noqa: BLE001 - rete assente o risposta strana: nessun avviso, nessun errore all'utente
-        return {"enabled": True, "available": False}
+        return {"enabled": True} | asdict(check(use_cache=not now))
+    except Exception as exc:  # noqa: BLE001 - rete assente o risposta strana: nessun avviso, nessun errore all'utente
+        return {"enabled": True, "available": False} | ({"error": str(exc)} if now else {})
+
+
+LICENSE_FILES = {"license": "LICENSE", "third_party": "THIRD_PARTY_LICENSES.txt"}
+
+
+def bundled_text(which: str) -> str | None:
+    """Testo di una licenza: accanto al programma installato, oppure nella cartella del progetto."""
+    name = LICENSE_FILES[which]
+    places = []
+    if getattr(sys, "frozen", False):
+        places.append(Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / name)
+    project = Path(__file__).resolve().parents[3]
+    places += [project / name, project / "packaging" / "build" / name]
+    for place in places:
+        if place.is_file():
+            return place.read_text(encoding="utf-8", errors="replace")
+    return None
 
 
 def make_server(workdir: Path, port: int = 0) -> GuiServer:
@@ -268,7 +289,23 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/settings":
             return self._json(200, settings())
         if path == "/api/update":
-            return self._json(200, update_status())
+            return self._json(200, update_status(now="now=1" in (urlparse(self.path).query or "")))
+        if path == "/api/about":
+            from wmt_pdf import __version__
+            from wmt_pdf.updates import PROJECT
+
+            return self._json(200, {
+                "version": __version__, "license": "AGPL-3.0-or-later", "project": PROJECT,
+                "texts": {key: bundled_text(key) is not None for key in LICENSE_FILES},
+            })
+        if path.startswith("/api/license/"):
+            which = path[len("/api/license/"):]
+            if which not in LICENSE_FILES:
+                return self._error(404, t("non trovato"))
+            text = bundled_text(which)
+            if text is None:
+                return self._error(404, t("testo della licenza non incluso in questa installazione"))
+            return self._json(200, {"text": text})
         if path == "/api/i18n":
             from wmt_pdf.i18n import catalog as messages
 
@@ -404,6 +441,10 @@ class Handler(BaseHTTPRequestHandler):
                 reader = list_page_objects if action == "objects" else list_objects
                 items = reader(store.current(doc).read_bytes(), page)
                 return self._json(200, [o.__dict__ for o in items])
+            if action == "detect":  # «Prepara modulo»: campi proposti per tutto il documento
+                from wmt_pdf.detect import detect_fields
+
+                return self._json(200, detect_fields(store.current(doc).read_bytes()))
         except (ValueError, CliError) as exc:
             return self._error(400, str(exc))
         return self._error(404, t("risorsa inesistente"))
@@ -565,12 +606,12 @@ class DesktopApi:
         return True
 
     def open_url(self, url: str) -> bool:
-        """Apre nel browser la pagina di una release (solo quelle di wmt-pdf)."""
+        """Apre nel browser una pagina di wmt-pdf su GitHub (release, progetto, licenza); nessun altro indirizzo."""
         import webbrowser
 
-        from wmt_pdf.updates import is_release_url
+        from wmt_pdf.updates import is_project_url
 
-        if not is_release_url(url):
+        if not is_project_url(url):
             return False
         return webbrowser.open(url)
 

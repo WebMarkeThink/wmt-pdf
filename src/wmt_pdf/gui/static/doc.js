@@ -3,6 +3,7 @@ import * as pdfjs from "/static/vendor/pdf.min.mjs";
 import {
   $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, t, toast,
 } from "./common.js";
+import { drawFormPrep, initFormPrep } from "./formprep.js";
 import { applyFields, drawFields, forgetFields, initFields, loadFields, pageWidgets, pendingFields } from "./fields.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.min.mjs";
@@ -27,6 +28,7 @@ const doc = {
 let ctx = null;
 
 export const currentDoc = () => doc.state;
+export const currentPdf = () => doc.pdf;
 
 export function initDocs(context) {
   ctx = context;
@@ -58,6 +60,10 @@ export function initDocs(context) {
   window.addEventListener("resize", closePopover);
   renderToolList();
   initFields({ apply, message, updateBar: () => ctx.updateBar(), redraw: () => drawPage(), currentId: () => doc.state?.id });
+  initFormPrep({
+    apply, message, goTo,
+    current: () => (doc.state && doc.viewport ? { id: doc.state.id, page: doc.page, viewport: doc.viewport } : null),
+  });
 }
 
 // --- apertura e caricamento ---------------------------------------------------------------
@@ -191,6 +197,7 @@ async function drawPage() {
     if (doc.task === task) doc.task = null;
   }
   drawFields(widgets, viewport);
+  drawFormPrep();
   $("doc-page").textContent = `${doc.page} / ${doc.pdf.numPages}`;
   $("doc-zoom").textContent = `${Math.round(doc.scale * 100)}%`;
   document.querySelectorAll(".thumb").forEach((t) => t.setAttribute("aria-current", String(Number(t.dataset.page) === doc.page)));
@@ -677,6 +684,7 @@ export async function closeDocument() {
   doc.thumbsRun++; // ferma le miniature ancora in corso
   $("thumbs").innerHTML = "";
   $("overlay").innerHTML = "";
+  drawFormPrep(); // nessun documento: «Prepara modulo» si chiude
   message("");
   ctx.show("home");
   return true;

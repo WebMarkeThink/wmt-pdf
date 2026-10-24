@@ -374,3 +374,13 @@ def test_pending_fields_count_as_unsaved(server, text_pdf, cache):
     assert server.documents.get(doc["id"]).pending_fields == 3
     status, _ = post(server, f"/api/doc/{doc['id']}/pending", {"count": "molti"})
     assert status == 400
+
+
+def test_about_and_license(server):
+    status, raw, _ = call(server, "GET", "/api/about")
+    about = json.loads(raw)
+    assert status == 200 and about["license"] == "AGPL-3.0-or-later" and about["texts"]["license"]
+    status, raw, _ = call(server, "GET", "/api/license/license")
+    assert status == 200 and "GNU AFFERO GENERAL PUBLIC LICENSE" in json.loads(raw)["text"]
+    status, _, _ = call(server, "GET", "/api/license/../../secret")
+    assert status == 404

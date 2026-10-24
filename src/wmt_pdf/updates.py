@@ -23,7 +23,10 @@ from wmt_pdf.source import CliError
 
 REPO = "WebMarkeThink/wmt-pdf"
 API = f"https://api.github.com/repos/{REPO}/releases?per_page=30"
-RELEASES = f"https://github.com/{REPO}/releases"
+PROJECT = f"https://github.com/{REPO}"
+RELEASES = f"{PROJECT}/releases"
+# Pagine del progetto che l'interfaccia può aprire nel browser (menu Aiuto), oltre a quelle delle release.
+PROJECT_PAGES = {PROJECT, f"{PROJECT}/blob/master/LICENSE", f"{PROJECT}/issues"}
 DISABLE_ENV = "WPDF_NO_UPDATE_CHECK"
 CACHE_HOURS = 24
 _VERSION = re.compile(r"v?(\d+)\.(\d+)\.(\d+)(?:[-.]?(a|alpha|b|beta|rc)[-.]?(\d+))?$", re.IGNORECASE)
@@ -78,6 +81,11 @@ def release_url(tag: str) -> str:
 def is_release_url(url: object) -> bool:
     """La pagina delle release o quella di una versione: niente altro si apre (né «..», né altri siti o schemi)."""
     return isinstance(url, str) and (url == RELEASES or bool(_RELEASE_URL.fullmatch(url)))
+
+
+def is_project_url(url: object) -> bool:
+    """Le release, la pagina del progetto, la licenza e le segnalazioni: niente altro."""
+    return is_release_url(url) or (isinstance(url, str) and url in PROJECT_PAGES)
 
 
 def _fetch(timeout: float) -> list[dict]:

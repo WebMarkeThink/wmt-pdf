@@ -214,3 +214,34 @@ body.doc-open .sidebar { display: none; }
 }
 .field-layer .field-textarea { padding-top: 1px; }
 .form-info { margin: 0 0 8px; font-size: 13px; }
+
+/* «Prepara modulo»: riquadri dei campi da creare; si disegna trascinando sul vuoto della pagina. */
+.prep-layer { position: absolute; inset: 0; display: none; cursor: crosshair; touch-action: none; }
+body.preparing .prep-layer { display: block; }
+body.preparing .field-layer, body.preparing .overlay { display: none; }
+.prep-box {
+  position: absolute; box-sizing: border-box; border: 1.5px solid #c2457a; background: rgba(194, 69, 122, .14);
+  cursor: move; touch-action: none;
+}
+.prep-box.prep-checkbox { border-color: #d9822b; background: rgba(217, 130, 43, .16); }
+.prep-box.prep-signature { border-style: dashed; }
+.prep-box.multiline { background: rgba(47, 143, 131, .14); border-color: #2f8f83; }
+.prep-box.selected { border-width: 2px; border-color: #3f63d8; background: rgba(63, 99, 216, .18); }
+.prep-ghost { border-style: dashed; pointer-events: none; }
+.prep-label {
+  position: absolute; left: 0; bottom: 100%; max-width: 220px; padding: 0 4px; font: 10px/14px system-ui, sans-serif;
+  color: #fff; background: #c2457a; border-radius: 3px 3px 0 0; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; pointer-events: none; opacity: 0;
+}
+.prep-box:hover .prep-label, .prep-box.selected .prep-label { opacity: 1; }
+.prep-box.selected .prep-label { background: #3f63d8; }
+.prep-handle {
+  position: absolute; right: -4px; bottom: -4px; width: 8px; height: 8px; background: #3f63d8; border-radius: 2px;
+  cursor: nwse-resize; display: none;
+}
+.prep-box.selected .prep-handle { display: block; }
+.prep-panel { display: flex; flex-direction: column; gap: 8px; }
+.prep-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.prep-row input, .prep-row select { flex: 1; min-width: 0; }
+.prep-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: var(--surface-2); }
+.prep-existing { position: absolute; box-sizing: border-box; border: 1px dashed #8a8f9c; background: rgba(138, 143, 156, .12); pointer-events: none; }

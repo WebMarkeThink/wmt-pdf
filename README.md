@@ -32,8 +32,8 @@ Per averlo come comando globale: `uv tool install --from . "wmt-pdf[ocr,convert,
 uv run wpdf gui              # oppure: uv run wpdf gui documento.pdf
 ```
 
-Due modi di lavorare, con la barra in alto sempre disponibile (Apri, Recenti, Unisci, Annulla, Ripeti, Salva,
-Salva con nome, Scarica). Ogni documento aperto ha la sua scheda nella barra, come in Acrobat: si passa dall'uno
+Due modi di lavorare, con il menu (File, Modifica, Visualizza, Aiuto: anche Stampa, Esporta, licenza e aggiornamenti)
+e la barra in alto sempre disponibili (Apri, Recenti, Unisci, Annulla, Ripeti, Salva, Salva con nome, Scarica). Ogni documento aperto ha la sua scheda nella barra, come in Acrobat: si passa dall'uno
 all'altro con un clic o con Ctrl+Tab (Ctrl+Maiusc+Tab per tornare indietro), ognuno con la sua pagina e il suo zoom;
 «+» apre un altro file. Una scheda si chiude con la × o con Ctrl+W: se ci sono modifiche non salvate si sceglie tra
 Salva, Non salvare e Annulla. Riaprire un file già aperto riporta alla sua scheda.
@@ -49,7 +49,10 @@ Salva, Non salvare e Annulla. Riaprire un file già aperto riporta alla sua sche
   stessa vista con i file da inserire. Poi: ruota o elimina la pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti
   applicati al documento aperto. Ogni modifica è una versione: si annulla e si ripete. Miniature delle pagine a
   sinistra. Nei PDF con campi (moduli) si scrive direttamente nei campi sulla pagina, caselle e scelte comprese;
-  «Applica i campi» li salva come versione nuova, e «Salva» li applica da solo.
+  «Applica i campi» li salva come versione nuova, e «Salva» li applica da solo. «Prepara modulo…» trasforma un PDF
+  piatto in modulo: «Riconosci campi» propone i campi dove ci sono trattini ____, quadratini, linee e riquadri vuoti,
+  e ogni campo si disegna anche a mano trascinando sulla pagina; si spostano, si ridimensionano, si rinominano, poi
+  «Crea campi».
 - **Unisci**: i file scelti o trascinati compaiono come pagine in miniatura, da ordinare, ruotare o togliere prima di
   creare il PDF, che si apre in una scheda nuova.
 - **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,
@@ -140,6 +143,7 @@ pezzi non si sostituisce in un colpo solo: `replace` lo segnala, e i pezzi si ca
 | `wpdf fill FILE --data dati.json -o out.pdf [--flatten]` | compila; da un CSV con più righe crea un PDF per riga (`-o cartella`, `--name-column nome`) |
 | `wpdf flatten FILE -o out.pdf` | rende i campi parte della pagina; evidenziazioni e note restano; rifiuta i PDF firmati |
 | `wpdf form FILE --spec campi.json -o out.pdf` | aggiunge campi: testo, data, casella, elenco, lista, scelta singola, firma |
+| `wpdf form FILE --detect -o proposta.json` / `--auto -o out.pdf` | propone (o crea subito) i campi di un modulo piatto: trattini, quadratini, linee, riquadri |
 
 Specifica dei campi: ogni campo ha `name`, `type` e la posizione, data come `rect` `[x0, y0, x1, y1]` in punti
 oppure come `after`: un'etichetta del testo, e il campo va subito alla sua destra. Opzioni: `width`, `height`, `page`,

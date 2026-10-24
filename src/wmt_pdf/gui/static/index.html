@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/doc.css">
   <link rel="stylesheet" href="/static/organize.css">
+  <link rel="stylesheet" href="/static/menubar.css">
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
@@ -37,6 +38,8 @@
 
     <div class="workspace">
       <header class="appbar" role="toolbar" aria-label="File">
+        <nav class="menubar" id="menubar" aria-label="Menu"></nav>
+        <span class="bar-sep" aria-hidden="true"></span>
         <div class="appbar-group">
           <button class="bar-btn" id="cmd-open" type="button" title="Apri (Ctrl+O)">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 7v11a2 2 0 0 0 2 2h13l3-9H7l-3 8"/></svg>
@@ -208,18 +211,49 @@
                 <canvas id="doc-canvas"></canvas>
                 <div class="overlay" id="overlay"></div>
                 <div class="field-layer" id="field-layer"></div>
+                <div class="prep-layer" id="prep-layer"></div>
               </div>
             </div>
           </div>
           <aside class="doc-tools" aria-label="Strumenti del documento">
+            <h3>Modulo</h3>
             <div id="doc-form" hidden>
-              <h3>Modulo</h3>
               <p id="form-info" class="muted form-info"></p>
               <div class="tool-row">
                 <button class="btn primary small-btn" id="form-apply" type="button" title="I valori scritti diventano una versione nuova del documento">Applica i campi</button>
                 <button class="btn ghost" id="form-reset" type="button">Annulla</button>
               </div>
               <label class="check"><input type="checkbox" id="form-highlight" checked> Evidenzia i campi</label>
+            </div>
+            <button class="btn" id="prep-open" type="button" title="Aggiungi campi compilabili: riconosciuti da soli o disegnati sulla pagina">Prepara modulo…</button>
+            <div id="prep-panel" class="prep-panel" hidden>
+              <p id="prep-info" class="muted form-info"></p>
+              <button class="btn" id="prep-detect" type="button" title="Trattini ____, quadratini, linee e riquadri vuoti del PDF">Riconosci campi</button>
+              <label class="prep-row">Nuovi campi
+                <select id="prep-kind">
+                  <option value="text">Testo</option>
+                  <option value="checkbox">Casella</option>
+                  <option value="date">Data</option>
+                  <option value="signature">Firma</option>
+                </select>
+              </label>
+              <div id="prep-edit" class="prep-edit" hidden>
+                <label class="prep-row">Nome <input id="prep-name" type="text" spellcheck="false"></label>
+                <label class="prep-row">Tipo
+                  <select id="prep-type">
+                    <option value="text">Testo</option>
+                    <option value="checkbox">Casella</option>
+                    <option value="date">Data</option>
+                    <option value="signature">Firma</option>
+                  </select>
+                </label>
+                <label class="check"><input type="checkbox" id="prep-multi"> Più righe</label>
+                <button class="btn ghost" id="prep-delete" type="button" title="Canc">Elimina campo</button>
+              </div>
+              <div class="tool-row">
+                <button class="btn ghost" id="prep-cancel" type="button">Annulla</button>
+                <button class="btn primary small-btn" id="prep-apply" type="button">Crea campi</button>
+              </div>
             </div>
             <h3>Pagina</h3>
             <div class="tool-row">
@@ -277,6 +311,18 @@
       <button class="btn primary small-btn" type="button" data-choice="save">Salva</button>
     </div>
   </dialog>
+
+  <dialog id="info-dialog" class="info-dialog" aria-labelledby="info-title">
+    <header><h2 id="info-title"></h2></header>
+    <p id="info-body"></p>
+    <pre id="info-text" class="info-text" hidden></pre>
+    <div class="tool-row">
+      <button class="btn" id="info-action" type="button" hidden></button>
+      <button class="btn primary small-btn" id="info-close" type="button">Chiudi</button>
+    </div>
+  </dialog>
+
+  <div class="print-root" id="print-root" aria-hidden="true"></div>
 
   <dialog id="org-preview" class="org-preview" aria-labelledby="org-preview-title">
     <header class="viewer-bar">

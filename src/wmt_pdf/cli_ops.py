@@ -137,8 +137,13 @@ def register(sub) -> None:
 
     add("flatten", cmd_flatten, t("Rende i campi parte della pagina (le altre annotazioni restano)"))
 
-    p = add("form", cmd_form, t("Aggiunge campi a un PDF da una specifica JSON (testo, data, casella, elenco, scelta, firma)"))
-    p.add_argument("--spec", required=True, help=t("file JSON: {\"fields\": [{\"name\", \"type\", \"rect\" o \"after\", ...}]}"))
+    p = add("form", cmd_form, t("Aggiunge campi a un PDF da una specifica JSON (testo, data, casella, elenco, scelta, firma)"),
+            output=t("PDF di destinazione (con --detect: la proposta JSON)"))
+    # --spec, se c'è, vale su --detect e --auto (la finestra manda anche il valore della casella).
+    p.add_argument("--spec", help=t("file JSON: {\"fields\": [{\"name\", \"type\", \"rect\" o \"after\", ...}]}"))
+    p.add_argument("--detect", action="store_true",
+                   help=t("propone i campi da trattini ____, quadratini, linee e riquadri: scrive la specifica JSON da rivedere"))
+    p.add_argument("--auto", action="store_true", help=t("crea subito i campi proposti da --detect"))
 
 
 # --- supporto ----------------------------------------------------------------------
@@ -570,8 +575,26 @@ def cmd_flatten(args) -> int:
 
 
 def cmd_form(args) -> int:
+    from wmt_pdf.detect import detect_fields
     from wmt_pdf.forms import add_fields
 
+    if not (args.spec or args.detect or args.auto):
+        raise CliError(t("indica --spec FILE, --detect oppure --auto"))
+    if not args.spec:
+        source, password = load_source(args.file), resolve_password(args)
+        target = Path(args.output)
+        check_target(target, Path(args.file), args.force)
+        spec = detect_fields(source.data, password)
+        if not spec["fields"]:
+            raise CliError(t("{name}: nessuno spazio da riempire riconosciuto (trattini, quadratini, linee, riquadri)",
+                             name=source.name))
+        if args.detect:
+            target.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+            print(t("{target}: {count} campi proposti", target=target, count=len(spec["fields"])))
+            return EXIT_OK
+        count = add_fields(source.data, target, spec, password)
+        print(t("{target}: {count} campi aggiunti", target=target, count=count))
+        return EXIT_OK
     spec_file = Path(args.spec)
     if not spec_file.is_file():
         raise CliError(t("specifica non trovata: {spec_file}", spec_file=spec_file))

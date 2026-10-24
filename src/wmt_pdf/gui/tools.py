@@ -182,6 +182,12 @@ _TOOLS = [
              Option("bold", "Grassetto", "bool", "--bold"),
          )),
     Tool("fields", "fields", "Campi del modulo", "Elenco dei campi compilabili", "form", "moduli", output="none"),
+    # Nella vista documento «Prepara modulo» la usa con la specifica rivista sulla pagina.
+    Tool("form", "form", "Crea modulo", "Campi compilabili dove il PDF ha trattini, quadratini, linee e riquadri",
+         "form", "moduli", suffix="modulo", one_of=("auto", "spec"), options=(
+             Option("auto", "Riconosci i campi da solo", "bool", "--auto", default=True),
+             Option("spec", "Oppure da una specifica JSON", "file", "--spec", accept=(".json",)),
+         )),
     Tool("fill", "fill", "Compila modulo", "Da un file JSON o CSV (più righe: un PDF per riga)", "fill", "moduli",
          suffix="compilato", output="fill", options=(
         Option("data", "Dati (JSON o CSV)", "file", "--data", required=True, accept=(".json", ".csv")),

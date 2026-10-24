@@ -9,6 +9,7 @@ import {
   showOpenedDocument, undo,
 } from "./doc.js";
 import { pendingFields } from "./fields.js";
+import { initMenuBar } from "./menubar.js";
 import { initOrganizer, organizeDocument, organizeFiles } from "./organize.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -484,7 +485,7 @@ function bindCommands() {
   document.addEventListener("keydown", (event) => {
     const mod = event.ctrlKey || event.metaKey;
     // Con una finestra di dialogo aperta le frecce e le scorciatoie di modifica restano a lei.
-    const typing = event.target.closest("input, textarea, select") || document.querySelector("dialog[open]");
+    const typing = event.target.closest?.("input, textarea, select") || document.querySelector("dialog[open]");
     const key = event.key.toLowerCase();
     if (mod && key === "o") {
       event.preventDefault();
@@ -668,6 +669,14 @@ async function start() {
   state.tools = await api("/api/tools");
   initDocs({ show, updateBar, tools: () => state.tools, organize: organizeDocument });
   initOrganizer({ show, tools: () => state.tools, view: () => state.view });
+  initMenuBar({
+    openCommand, recentFiles, tools: () => state.tools,
+    mergeFiles: () => organizeFiles([], state.view === "doc" ? "doc" : "home"),
+    home: () => {
+      state.category = "tutti";
+      show("home");
+    },
+  });
   $("search").addEventListener("input", renderGrid);
   $("back").addEventListener("click", () => show("home"));
   $("run").addEventListener("click", run);
