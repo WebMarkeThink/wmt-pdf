@@ -9,7 +9,7 @@ import {
   showOpenedDocument, undo,
 } from "./doc.js";
 import { pendingFields } from "./fields.js";
-import { initMenuBar } from "./menubar.js";
+import { initMenuBar, menuOpen } from "./menubar.js";
 import { initOrganizer, organizeDocument, organizeFiles } from "./organize.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
@@ -483,6 +483,7 @@ function bindCommands() {
     if (!event.target.closest(".menu-wrap")) closeMenu();
   });
   document.addEventListener("keydown", (event) => {
+    if (menuOpen()) return; // frecce e tasti muovono nel menu, non pagine o oggetti del documento
     const mod = event.ctrlKey || event.metaKey;
     // Con una finestra di dialogo aperta le frecce e le scorciatoie di modifica restano a lei.
     const typing = event.target.closest?.("input, textarea, select") || document.querySelector("dialog[open]");

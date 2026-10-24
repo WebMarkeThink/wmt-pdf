@@ -10,6 +10,7 @@ let ctx = null; // { openCommand, recentFiles, mergeFiles, openTool, tools }
 let openTitle = null; // pulsante del menu aperto
 
 const desktop = () => Boolean(window.pywebview?.api);
+export const menuOpen = () => openTitle !== null; // app.js: con un menu aperto i tasti non vanno al documento
 const hasDoc = () => Boolean(currentDoc());
 
 // Una voce: { label, keys, run, enabled, checked, submenu } oppure "-" per una riga di separazione.
@@ -267,11 +268,13 @@ async function buildMenu(items, at, sub = false) {
       button.setAttribute("aria-haspopup", "menu");
       const openSub = async (focus) => {
         if (button.disabled) return;
-        menu.querySelectorAll(":scope ~ .menubar-menu.sub").forEach((m) => m.remove());
         document.querySelectorAll(".menubar-menu.sub").forEach((m) => { if (m.parentMenu === menu) m.remove(); });
+        const token = (menu.subToken || 0) + 1;
+        menu.subToken = token;
         const r = button.getBoundingClientRect();
         const child = await buildMenu(item.submenu(), { left: r.right + 2, top: r.top - 6 }, true);
-        if (!button.isConnected) return;
+        // Recenti chiede al server: se intanto si è passati a un'altra voce, questo sottomenu non serve più.
+        if (!button.isConnected || menu.subToken !== token) return;
         child.parentMenu = menu;
         child.parentItem = button;
         document.body.append(child);
@@ -289,6 +292,7 @@ async function buildMenu(items, at, sub = false) {
     } else {
       button.addEventListener("mouseenter", () => {
         // Passando su un'altra voce si chiude il sottomenu aperto da questo menu.
+        menu.subToken = (menu.subToken || 0) + 1;
         document.querySelectorAll(".menubar-menu.sub").forEach((m) => { if (m.parentMenu === menu) m.remove(); });
       });
       button.addEventListener("click", () => {

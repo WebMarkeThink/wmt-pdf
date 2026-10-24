@@ -36,10 +36,16 @@
 
 /* Stampa: solo le pagine del documento, una per foglio, senza margini aggiunti. */
 .print-root { display: none; }
+/* Ogni pagina sta in un foglio (anche un A4 su carta Letter); le pagine orizzontali vanno su fogli orizzontali. */
+@page { margin: 0; }
+@page landscape { size: landscape; margin: 0; }
 @media print {
-  @page { margin: 0; }
   body > *:not(.print-root) { display: none !important; }
   .print-root { display: block; }
-  .print-page { display: block; width: 100%; height: auto; break-after: page; page-break-after: always; }
+  .print-page {
+    display: block; max-width: 100%; max-height: 100vh; width: auto; height: auto; margin: 0 auto; object-fit: contain;
+    break-after: page; page-break-after: always;
+  }
+  .print-page.landscape { page: landscape; }
   .print-page:last-child { break-after: auto; page-break-after: auto; }
 }
