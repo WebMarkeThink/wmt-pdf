@@ -1,7 +1,8 @@
-"""Conversione in PDF da altri formati, con una libreria dedicata per ciascuno.
+"""Conversione in PDF da altri formati.
 
-Si conservano contenuto e struttura (titoli, paragrafi, tabelle, immagini), non l'impaginazione
-esatta dell'originale: per quella servirebbe il programma che ha creato il file.
+I documenti Office li impagina, se c'è, il programma che li sa leggere (Microsoft Office o LibreOffice, vedi
+office.py): il PDF è identico all'originale. Altrimenti, e per gli altri formati, una libreria dedicata per
+ciascuno conserva contenuto e struttura (titoli, paragrafi, tabelle, immagini), non l'impaginazione esatta.
 """
 
 from __future__ import annotations
@@ -24,6 +25,9 @@ SUPPORTED = {
     ".pdf": "PDF", ".p7m": "PDF firmato", ".docx": "Word", ".xlsx": "Excel", ".xlsm": "Excel",
     ".pptx": "PowerPoint", ".odt": "OpenDocument", ".md": "Markdown", ".markdown": "Markdown",
     ".txt": "testo", ".html": "HTML", ".htm": "HTML", ".csv": "CSV", ".eml": "email",
+    # Solo con Microsoft Office o LibreOffice installati (non c'è una conversione interna):
+    ".doc": "Word", ".docm": "Word", ".dotx": "Word", ".rtf": "RTF", ".xls": "Excel", ".ods": "OpenDocument",
+    ".ppt": "PowerPoint", ".ppsx": "PowerPoint", ".odp": "OpenDocument",
 } | {ext: "immagine" for ext in IMAGE_EXT}
 
 PAGE_W_PT, PAGE_H_PT = 595.28, 841.89  # A4
@@ -45,25 +49,54 @@ def kind_of(path: Path) -> str:
     return suffix
 
 
-ZIP_FORMATS = {".docx", ".xlsx", ".xlsm", ".pptx", ".odt"}
+ZIP_FORMATS = {".docx", ".docm", ".dotx", ".xlsx", ".xlsm", ".pptx", ".ppsx", ".odt", ".ods", ".odp"}
 MAX_UNZIPPED_BYTES = 500 * 1024 * 1024  # un documento Office vero sta molto sotto; oltre è un archivio-bomba
 MAX_SHEET_CELLS = 2_000_000
 
 
-def to_pdf(path: Path, *, attachments: bool = False, local_files: bool = True) -> Converted:
+def to_pdf(path: Path, *, attachments: bool = False, local_files: bool = True, engine: str = "auto") -> Converted:
     """Restituisce il PDF corrispondente al file; un PDF o un p7m con PDF passano così come sono.
 
-    local_files=False: l'HTML non può leggere nessun file locale (per allegati e contenuti non fidati).
+    local_files=False: l'HTML non può leggere nessun file locale e i documenti Office non si aprono con Office o
+    LibreOffice (allegati e contenuti non fidati: solo la conversione interna).
+    engine: "auto", "office", "libreoffice" o "interno" (vedi office.py).
     """
+    from wmt_pdf.office import (
+        NEEDS_ENGINE,
+        OFFICE_FORMATS,
+        faithful_pdf,
+        resolve_engine,
+    )
+
     suffix = kind_of(path)
     if suffix in (".pdf", ".p7m"):
         return Converted(load_source(path).data)
+    engine = resolve_engine(engine)  # motore sconosciuto: errore subito
+    if suffix in ZIP_FORMATS:
+        _check_zip(path.read_bytes(), path.name)
+    notes: list[str] = []
+    if suffix in OFFICE_FORMATS and local_files:
+        data, notes = faithful_pdf(path, engine)
+        if data is not None:
+            return Converted(data, notes)
+        if suffix in NEEDS_ENGINE:
+            raise CliError(t("{name}: per questo formato serve Microsoft Office o LibreOffice (gratuito) installato", name=path.name))
+        if engine != "interno":
+            notes.append(t("impaginazione semplificata (testo, tabelle e immagini): per un PDF identico all'originale "
+                           "installa Microsoft Office o LibreOffice (gratuito)"))
+    elif suffix in NEEDS_ENGINE:
+        raise CliError(t("{name}: formato convertibile solo con Microsoft Office o LibreOffice", name=path.name))
+    converted = _internal(path, suffix, attachments, local_files)
+    converted.notes[:0] = notes
+    return converted
+
+
+def _internal(path: Path, suffix: str, attachments: bool, local_files: bool) -> Converted:
+    """Conversione con le librerie Python: contenuto e struttura, non l'impaginazione esatta."""
     _require_convert_extra(suffix)
     if suffix in IMAGE_EXT:
         return Converted(images_to_pdf(path))
     raw = path.read_bytes()
-    if suffix in ZIP_FORMATS:
-        _check_zip(raw, path.name)
     base = path.parent if local_files else None
     if suffix == ".docx":
         return Converted(html_to_pdf(docx_to_html(raw), base))

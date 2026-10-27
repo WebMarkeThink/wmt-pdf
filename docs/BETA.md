@@ -41,6 +41,8 @@ versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra
 - **Prepara modulo…** (pannello a destra o menu Modifica) su un modulo piatto: «Riconosci campi», controllare le
   proposte, aggiungere campi trascinando sulla pagina, spostarli e rinominarli, poi «Crea campi» e compilarli.
 - Il **menu** in alto: File (Stampa, Esporta, Recenti), Modifica, Visualizza, Aiuto (licenza, aggiornamenti).
+- **Converti in PDF** un Word, Excel o PowerPoint: con Microsoft Office (o LibreOffice) installato il PDF deve essere
+  identico all'originale (intestazioni, colori, caratteri, tabelle); anche i vecchi .doc, .xls, .ppt.
 - Gli strumenti della griglia: comprimi, converti, esporta, OCR, filigrana, password, moduli.
 - Verifica di PDF firmati e di file `.p7m`; firma grafica.
 - **Compatta**: la barra sempre in primo piano su un lato dello schermo.

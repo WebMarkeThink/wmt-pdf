@@ -100,7 +100,7 @@ Per i PDF protetti: `--password` oppure `--password-env NOME_VARIABILE` (non res
 | Comando | Cosa fa |
 |---|---|
 | `wpdf merge A B C... -o out.pdf` | unisce file anche di formati diversi, un segnalibro per file; `--attachments` accoda gli allegati delle email |
-| `wpdf convert FILE -o out.pdf` | da Word, Excel, PowerPoint, ODT, Markdown, testo, HTML, CSV, email `.eml`, immagini (TIFF multipagina compreso) |
+| `wpdf convert FILE -o out.pdf [--engine auto\|office\|libreoffice\|interno]` | da Word, Excel, PowerPoint (anche .doc, .xls, .ppt, .rtf), OpenDocument, Markdown, testo, HTML, CSV, email `.eml`, immagini (TIFF multipagina compreso). I documenti Office li impagina Microsoft Office (Windows) o LibreOffice, se installati: PDF identico all'originale; senza, impaginazione semplificata |
 | `wpdf assemble A B... --pages "1:1-3,2:4@90,1:5" -o out.pdf` | compone un PDF scegliendo pagine, ordine e rotazione (`file:pagine@gradi`) da uno o più file |
 | `wpdf split FILE --every N` / `--ranges "1-3;4-"` `-o cartella` | divide in più file |
 | `wpdf pages FILE --keep 1-3` / `--delete 2` / `--order 3,1,2` | tiene, toglie o riordina pagine |

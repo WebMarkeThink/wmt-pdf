@@ -41,6 +41,9 @@ def register(sub) -> None:
 
     p = add("convert", cmd_convert, t("Converte in PDF: Word, Excel, PowerPoint, ODT, Markdown, testo, HTML, CSV, email, immagini"))
     p.add_argument("--attachments", action="store_true", help=t("per le email: accoda anche gli allegati"))
+    p.add_argument("--engine", choices=("auto", "office", "libreoffice", "interno"), default="auto",
+                   help=t("chi impagina i documenti Office: auto (Microsoft Office, poi LibreOffice, poi interno), "
+                          "office, libreoffice, interno (senza programmi esterni, impaginazione semplificata)"))
 
     p = add("split", cmd_split, t("Divide il PDF in più file"), output=t("cartella di destinazione"))
     group = p.add_mutually_exclusive_group(required=True)
@@ -207,7 +210,7 @@ def cmd_convert(args) -> int:
     if not src.is_file():
         raise CliError(t("file non trovato: {src}", src=src))
     check_target(target, src, args.force)
-    converted = to_pdf(src, attachments=args.attachments)
+    converted = to_pdf(src, attachments=args.attachments, engine=args.engine)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(converted.data)
     count, kb = _count(converted.data, None), _kb(len(converted.data))

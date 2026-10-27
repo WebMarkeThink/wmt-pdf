@@ -109,6 +109,10 @@ _TOOLS = [
     Tool("convert", "convert", "Converti in PDF", "Word, Excel, PowerPoint, ODT, immagini, email, testo",
          "convert", "converti", accept=tuple(ANY), options=(
              Option("attachments", "Per le email, accoda gli allegati", "bool", "--attachments"),
+             Option("engine", "Documenti Office impaginati da", "choice", "--engine",
+                    ("auto", "office", "libreoffice", "interno"),
+                    ("Automatico (Office, poi LibreOffice)", "Microsoft Office", "LibreOffice",
+                     "wmt-pdf (impaginazione semplificata)"), default="auto"),
          )),
     Tool("export", "export", "Esporta", "In Word, Excel, HTML, Markdown, testo o immagini", "export", "converti",
          output="export", options=(

@@ -236,6 +236,8 @@ def _italian_and_private_settings(monkeypatch, tmp_path_factory):
     from wmt_pdf.gui import documents
 
     monkeypatch.setenv("WPDF_LANG", "it")
+    # Stesso risultato su ogni computer: niente Microsoft Office o LibreOffice installati (test_office li simula).
+    monkeypatch.setenv("WPDF_OFFICE_ENGINE", "interno")
     settings_file = tmp_path_factory.mktemp("impostazioni") / "impostazioni.json"
     monkeypatch.setattr(documents, "_settings_path", lambda: settings_file)
     yield
