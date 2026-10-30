@@ -441,6 +441,15 @@ class Handler(BaseHTTPRequestHandler):
                 reader = list_page_objects if action == "objects" else list_objects
                 items = reader(store.current(doc).read_bytes(), page)
                 return self._json(200, [o.__dict__ for o in items])
+            if action == "scanlines":  # «Modifica testo» su una pagina scansionata
+                from wmt_pdf.ocrlayer import scan_lines
+
+                query = dict(part.split("=", 1) for part in (urlparse(self.path).query or "").split("&") if "=" in part)
+                return self._json(200, scan_lines(store.current(doc).read_bytes(), int(query.get("page", "1"))))
+            if action == "scan":  # PDF scansionato: la vista documento propone l'OCR
+                from wmt_pdf.ocrlayer import scan_status
+
+                return self._json(200, scan_status(store.current(doc).read_bytes()))
             if action == "detect":  # «Prepara modulo»: campi proposti per tutto il documento
                 from wmt_pdf.detect import detect_fields
 

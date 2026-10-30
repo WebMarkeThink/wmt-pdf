@@ -38,6 +38,8 @@ versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra
 - **Unisci** più file (anche Word, Excel, immagini, email): ordinare e togliere le pagine prima di creare il PDF.
 - **Moduli**: aprire un PDF con campi, scrivere direttamente nei campi (testo, caselle, scelte), cambiare pagina e
   tornare, poi «Applica i campi» o «Salva».
+- **Scansioni**: aprire un PDF scansionato, accettare il riconoscimento del testo, poi «Seleziona testo» per copiare e
+  «Modifica testo» per cambiare una riga direttamente sulla pagina. Controllare che colore e posizione tornino.
 - **Prepara modulo…** (pannello a destra o menu Modifica) su un modulo piatto: «Riconosci campi», controllare le
   proposte, aggiungere campi trascinando sulla pagina, spostarli e rinominarli, poi «Crea campi» e compilarli.
 - Il **menu** in alto: File (Stampa, Esporta, Recenti), Modifica, Visualizza, Aiuto (licenza, aggiornamenti).

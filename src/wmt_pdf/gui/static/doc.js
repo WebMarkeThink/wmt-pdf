@@ -4,6 +4,7 @@ import {
   $, api, collectOptions, desktop, downloadFile, el, fetchBlob, missingOptions, post, renderOptions, svg, t, toast,
 } from "./common.js";
 import { drawFormPrep, initFormPrep } from "./formprep.js";
+import { checkScan, initScan, recognizeForEdit } from "./scan.js";
 import { applyFields, drawFields, forgetFields, initFields, loadFields, pageWidgets, pendingFields } from "./fields.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.min.mjs";
@@ -23,6 +24,7 @@ const NOT_IN_LIST = new Set(["merge", "convert", "p7m", "edittext", "addtext", "
 
 const doc = {
   state: null, pdf: null, page: 1, scale: 1.25, mode: "pointer", viewport: null, selected: null, reselect: null, boxesRun: 0, drawRun: 0,
+  textRun: 0, textLayer: null,
   task: null, thumbsRun: 0, busy: false, dialogTool: null, dialogFiles: {},
 };
 let ctx = null;
@@ -60,6 +62,17 @@ export function initDocs(context) {
   window.addEventListener("resize", closePopover);
   renderToolList();
   initFields({ apply, message, updateBar: () => ctx.updateBar(), redraw: () => drawPage(), currentId: () => doc.state?.id });
+  initScan({
+    apply, message, tools: ctx.tools, current: () => doc.state?.id, fileId: () => doc.state?.file_id,
+    onDone: (forEdit) => {
+      if (forEdit) {
+        message(t("Testo riconosciuto: fai clic su una riga per cambiarla"));
+        return;
+      }
+      setMode("text");
+      message(t("Testo riconosciuto: ora puoi selezionarlo e copiarlo, o cambiarlo con «Modifica testo»."));
+    },
+  });
   initFormPrep({
     apply, message, goTo,
     current: () => (doc.state && doc.viewport ? { id: doc.state.id, page: doc.page, viewport: doc.viewport } : null),
@@ -153,6 +166,7 @@ async function load(state) {
   doc.pdf = await doc.loading.promise;
   doc.page = Math.min(Math.max(1, doc.page), doc.pdf.numPages);
   loadFields(state, doc.pdf); // il conteggio dei campi prosegue mentre la pagina si disegna
+  checkScan(state); // in sottofondo: la pagina si vede subito, la proposta di OCR arriva dopo
   ctx.updateBar();
   await drawPage();
   renderThumbs();
@@ -198,6 +212,7 @@ async function drawPage() {
   }
   drawFields(widgets, viewport);
   drawFormPrep();
+  drawTextLayer(page, viewport);
   $("doc-page").textContent = `${doc.page} / ${doc.pdf.numPages}`;
   $("doc-zoom").textContent = `${Math.round(doc.scale * 100)}%`;
   document.querySelectorAll(".thumb").forEach((t) => t.setAttribute("aria-current", String(Number(t.dataset.page) === doc.page)));
@@ -212,12 +227,24 @@ async function loadTextBoxes() {
   overlay.innerHTML = "";
   overlay.className = `overlay ${doc.mode}`;
   select(null);
-  if (doc.mode === "add") return;
+  if (doc.mode === "add" || doc.mode === "text") return;
   const pointer = doc.mode === "pointer";
   let objects = [];
   try {
-    const kind = pointer ? "objects" : "textobjects";
-    objects = await api(`/api/doc/${doc.state.id}/${kind}?page=${doc.page}`);
+    if (!pointer) {
+      // «Modifica testo» su una scansione: le righe dell'OCR, che si coprono e si riscrivono.
+      const scan = await api(`/api/doc/${doc.state.id}/scanlines?page=${doc.page}`);
+      if (run !== doc.boxesRun) return;
+      if (scan.image_page && !scan.lines.length) {
+        recognizeForEdit();
+        return;
+      }
+      if (scan.image_page) objects = scan.lines.map((line) => ({ ...line, scanline: true }));
+    }
+    if (!objects.length) {
+      const kind = pointer ? "objects" : "textobjects";
+      objects = await api(`/api/doc/${doc.state.id}/${kind}?page=${doc.page}`);
+    }
   } catch (error) {
     if (pointer) message(error.message, true); // la pagina resta visibile; si può comunque aggiungere testo
     return;
@@ -239,8 +266,12 @@ async function loadTextBoxes() {
       left: `${Math.min(x0, x1) - 1}px`, top: `${Math.min(y0, y1) - 1}px`,
       width: `${Math.max(Math.abs(x1 - x0), 4) + 2}px`, height: `${Math.max(Math.abs(y1 - y0), 4) + 2}px`,
     });
-    box.addEventListener("pointerdown", (event) => startDrag(event, obj, box));
-    box.addEventListener("click", (event) => event.stopPropagation());
+    if (obj.scanline) box.classList.add("scanline");
+    else box.addEventListener("pointerdown", (event) => startDrag(event, obj, box));
+    box.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (obj.scanline) editObject(obj, box);
+    });
     if (pointer && obj.kind === "text") box.addEventListener("dblclick", () => editObject(obj, box));
     overlay.append(box);
     // index -1: l'ultimo di quel tipo, dove finisce l'oggetto spostato.
@@ -374,7 +405,41 @@ function setMode(mode) {
   document.querySelectorAll(".mode").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   closePopover();
   message("");
-  if (doc.viewport) loadTextBoxes();
+  if (doc.viewport) {
+    loadTextBoxes();
+    if (doc.pdf) doc.pdf.getPage(doc.page).then((page) => drawTextLayer(page, doc.viewport));
+  }
+}
+
+// «Seleziona testo»: lo strato di PDF.js, trasparente, sopra la pagina. Comprende il testo invisibile dell'OCR.
+async function drawTextLayer(page, viewport) {
+  const run = ++doc.textRun; // zoom, pagina o modalità cambiati in fretta: vale solo l'ultimo disegno
+  doc.textLayer?.cancel();
+  doc.textLayer = null;
+  const old = $("text-layer");
+  old.innerHTML = "";
+  old.hidden = doc.mode !== "text";
+  if (old.hidden) return;
+  // Si costruisce a parte e si sostituisce alla fine: due disegni non scrivono mai nello stesso elemento.
+  const fresh = el("div", { class: "textLayer", id: "text-layer" });
+  fresh.style.setProperty("--total-scale-factor", String(viewport.scale));
+  const textLayer = new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container: fresh, viewport });
+  doc.textLayer = textLayer;
+  try {
+    await textLayer.render();
+  } catch (error) {
+    if (error?.name !== "AbortException") message(error.message, true);
+    return;
+  }
+  if (run === doc.textRun) $("text-layer").replaceWith(fresh);
+}
+
+export function selectPageText() {
+  if (doc.mode !== "text") return;
+  const range = document.createRange();
+  range.selectNodeContents($("text-layer"));
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
 }
 
 function goTo(page) {
@@ -444,6 +509,19 @@ function editObject(obj, box) {
   // Per indice, non per punto: con testi sovrapposti (apici, parole dentro una riga) il punto è ambiguo.
   const target = { page: doc.page, index: obj.index };
   const screen = box.getBoundingClientRect();
+  const scanned = { page: doc.page, rect: obj.bbox?.join(",") };
+  if (obj.scanline) {
+    openPopover({
+      title: t("Modifica testo"), text: obj.text, extra: false, remove: true,
+      note: t("Pagina scansionata: la riga viene coperta e riscritta, con un carattere simile ma non identico."),
+      anchor: { left: screen.left, top: screen.bottom },
+      onApply: (values) => apply("scanedit", { ...scanned, text: values.text.replace(/\n/g, " ") }),
+      onDelete: () => apply("scanedit", { ...scanned, text: "" }),
+      onClose: () => box.classList.remove("active"),
+    });
+    box.classList.add("active");
+    return;
+  }
   openPopover({
     title: t("Modifica testo"), text: obj.text, extra: false, remove: true,
     note: obj.embedded

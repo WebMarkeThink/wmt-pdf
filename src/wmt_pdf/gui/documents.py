@@ -53,9 +53,11 @@ def settings() -> dict:
         data = {}
     data = data if isinstance(data, dict) else {}
     update_check = data.get("update_check", True)
+    auto_ocr = data.get("auto_ocr", False)
     return {
         "language": normalize(data.get("language")) or normalize(os.environ.get("WPDF_LANG")) or system_language(),
         "update_check": update_check if isinstance(update_check, bool) else True,
+        "auto_ocr": auto_ocr if isinstance(auto_ocr, bool) else False,
     }
 
 
@@ -72,6 +74,10 @@ def save_settings(values: dict) -> dict:
         if not isinstance(values["update_check"], bool):
             raise ValueError(t("impostazione non valida: update_check"))
         current["update_check"] = values["update_check"]
+    if "auto_ocr" in values:
+        if not isinstance(values["auto_ocr"], bool):
+            raise ValueError(t("impostazione non valida: auto_ocr"))
+        current["auto_ocr"] = values["auto_ocr"]
     target = _settings_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(current, indent=1), encoding="utf-8")

@@ -4,7 +4,7 @@ import {
   renderOptions, screenArea, size, svg, t, toast, upload,
 } from "./common.js";
 import {
-  PDF_OPTIONS, clearSelection, closeDocument, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav,
+  PDF_OPTIONS, clearSelection, selectPageText, closeDocument, currentDoc, download, initDocs, nudgeSelection, openDocument, pageNav,
   activateTab, activeTabId, closeTab, cycleTab, openTabs, pdfjs, redo, reopenDocument, save, saveAs,
   showOpenedDocument, undo,
 } from "./doc.js";
@@ -509,6 +509,7 @@ function bindCommands() {
       else undo();
     } else if (mod && !typing && key === "a" && state.view === "doc") {
       event.preventDefault(); // «seleziona tutto» sulla pagina evidenzierebbe tutto in scuro
+      selectPageText(); // in «Seleziona testo»: il testo della pagina, e basta
     } else if (mod && !typing && key === "y") {
       event.preventDefault();
       redo();

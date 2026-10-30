@@ -245,3 +245,35 @@ body.preparing .field-layer, body.preparing .overlay { display: none; }
 .prep-row input, .prep-row select { flex: 1; min-width: 0; }
 .prep-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: var(--surface-2); }
 .prep-existing { position: absolute; box-sizing: border-box; border: 1px dashed #8a8f9c; background: rgba(138, 143, 156, .12); pointer-events: none; }
+
+/* Proposta di OCR sopra la pagina. */
+.scan-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 14px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-bottom: 1px solid var(--border);
+}
+.scan-bar[hidden] { display: none; }
+.scan-bar span { flex: 1; min-width: 200px; }
+.scan-bar .btn { flex: none; width: auto; }
+
+/* «Seleziona testo»: lo strato trasparente di PDF.js (le regole del suo visualizzatore, pdf_viewer.css). */
+.textLayer {
+  --min-font-size: 1; --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  position: absolute; inset: 0; overflow: clip; line-height: 1; text-align: initial; text-size-adjust: none;
+  forced-color-adjust: none; transform-origin: 0 0; user-select: text; -webkit-user-select: text; cursor: text;
+}
+.textLayer[hidden] { display: none; }
+.textLayer[data-main-rotation="90"] { transform: rotate(90deg) translateY(-100%); }
+.textLayer[data-main-rotation="180"] { transform: rotate(180deg) translate(-100%, -100%); }
+.textLayer[data-main-rotation="270"] { transform: rotate(270deg) translateX(-100%); }
+.textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1; --font-height: 0; font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1; --rotate: 0deg; transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.textLayer .markedContent { display: contents; }
+.textLayer span[role="img"] { user-select: none; cursor: default; }
+.textLayer ::selection { background: rgba(0, 0, 255, .28); color: transparent; }
+.textLayer br::selection { background: transparent; }
+.overlay.text { pointer-events: none; }
+.overlay.select .tbox.scanline { border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); cursor: text; }

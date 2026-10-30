@@ -384,3 +384,37 @@ def test_about_and_license(server):
     assert status == 200 and "GNU AFFERO GENERAL PUBLIC LICENSE" in json.loads(raw)["text"]
     status, _, _ = call(server, "GET", "/api/license/../../secret")
     assert status == 404
+
+
+def _image_only_pdf(path):
+    import io
+
+    from PIL import Image
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+
+    picture = io.BytesIO()
+    Image.new("RGB", (200, 280), "white").save(picture, "PNG")
+    picture.seek(0)
+    c = canvas.Canvas(str(path), pagesize=(595, 842))
+    c.drawImage(ImageReader(picture), 0, 0, 595, 842)
+    c.showPage()
+    c.save()
+    return path
+
+
+def test_scan_status(server, text_pdf, tmp_path, cache):
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, _image_only_pdf(tmp_path / "scan.pdf"))})
+    status, raw, _ = call(server, "GET", f"/api/doc/{doc['id']}/scan")
+    info = json.loads(raw)
+    assert status == 200 and info["pages"] == [1] and info["total"] == 1 and info["signed"] is False
+    _, doc = post(server, "/api/doc/open", {"file_id": upload(server, text_pdf)})
+    _, raw, _ = call(server, "GET", f"/api/doc/{doc['id']}/scan")
+    assert json.loads(raw)["pages"] == []
+
+
+def test_auto_ocr_setting(server):
+    status, values = post(server, "/api/settings", {"auto_ocr": True})
+    assert status == 200 and values["auto_ocr"] is True
+    status, _ = post(server, "/api/settings", {"auto_ocr": "sì"})
+    assert status == 400

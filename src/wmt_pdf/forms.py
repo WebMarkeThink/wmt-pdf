@@ -154,7 +154,7 @@ def fill(data: bytes, target: Path | None, values: dict, *, flatten: bool = Fals
     with open_pdf(data, password) as pdf:
         if "/AcroForm" not in pdf.Root:
             raise CliError(t("il PDF non ha campi da compilare (per crearli: wpdf form)"))
-        if _has_signatures(pdf):
+        if has_signatures(pdf):
             raise CliError(t("il PDF contiene firme digitali: modificarne i campi le renderebbe non valide"))
         form = _form(pdf)
         names = [n for n, _ in form.items()]
@@ -237,7 +237,7 @@ def _truthy(value, name: str) -> bool:
 
 def _flatten_widgets(pdf: pikepdf.Pdf) -> None:
     """Rende i campi parte della pagina; le altre annotazioni (evidenziazioni, note) restano."""
-    if _has_signatures(pdf):
+    if has_signatures(pdf):
         raise CliError(t("il PDF contiene firme digitali: appiattirlo le renderebbe non valide"))
     pdf.generate_appearance_streams()
     problems = refresh_text_appearances(pdf)  # il generatore di qpdf scrive «?» al posto delle accentate
@@ -266,7 +266,7 @@ def _flatten_widgets(pdf: pikepdf.Pdf) -> None:
         del pdf.Root.AcroForm
 
 
-def _has_signatures(pdf: pikepdf.Pdf) -> bool:
+def has_signatures(pdf: pikepdf.Pdf) -> bool:
     if "/AcroForm" not in pdf.Root:
         return False
     return any(f.field_type == pikepdf.Name.Sig and "/V" in f.obj for f in pdf.acroform.fields)
@@ -304,7 +304,7 @@ def add_fields(data: bytes, target: Path, spec: dict, password: str | None = Non
     if not isinstance(specs, list) or not specs:
         raise CliError(t("specifica vuota: serve {\"fields\": [{\"name\": ..., \"type\": ..., \"rect\" o \"after\": ...}]}"))
     with open_pdf(data, password) as pdf:
-        if _has_signatures(pdf):
+        if has_signatures(pdf):
             raise CliError(t("il PDF contiene firme digitali: aggiungere campi le renderebbe non valide"))
         _ensure_acroform(pdf)
         existing = {f.fully_qualified_name for f in pdf.acroform.fields}

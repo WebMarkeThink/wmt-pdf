@@ -176,6 +176,12 @@ _TOOLS = [
              Option("index", "Oggetto", "number", "--index", required=True),
              Option("by", "Spostamento dx,dy", "text", "--by", required=True),
          )),
+    Tool("scanedit", "scanedit", "Modifica testo", "Cambia una riga di una pagina scansionata", "edit-text",
+         "modifica", suffix="modificato", hidden=True, options=(
+             Option("page", "Pagina", "number", "--page", required=True, default=1),
+             Option("rect", "Riquadro", "text", "--rect", required=True),
+             Option("text", "Testo nuovo", "text", "--text"),
+         )),
     Tool("addtext", "addtext", "Aggiungi testo", "Scrive testo in un punto della pagina", "add-text", "modifica",
          suffix="con_testo", hidden=True, options=(
              Option("page", "Pagina", "number", "--page", required=True, default=1),

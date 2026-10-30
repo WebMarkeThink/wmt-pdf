@@ -239,6 +239,17 @@ def _page_text(data: bytes, page_no: int, password: str | None) -> str:
         doc.close()
 
 
+def font_width(text: str, size: float) -> float:
+    """Larghezza del testo nel carattere con cui si scrive il testo aggiunto."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    return stringWidth(text, _overlay_font(False), size)
+
+
+def refuse_signed(data: bytes) -> None:
+    _refuse_signed(data)
+
+
 def _refuse_signed(data: bytes) -> None:
     from wmt_pdf.pades import count_signatures
 
@@ -572,7 +583,8 @@ def _append_text(pdf: pikepdf.Pdf, page: pikepdf.Page, items: list[tuple[_Info, 
     """Il testo nuovo va in fondo al flusso della pagina (non in un gruppo a parte), così resta modificabile."""
     box = page.mediabox
     x0, y0 = float(box[0]), float(box[1])
-    layer = _overlay(float(box[2]) - x0, float(box[3]) - y0, (x0, y0), items)
+    # Il testo finisce nel flusso della pagina, quindi nello spazio del PDF: niente spostamento per il MediaBox.
+    layer = _overlay(float(box[2]) - x0, float(box[3]) - y0, (0, 0), items)
     with pikepdf.open(io.BytesIO(layer)) as extra:
         source = extra.pages[0]
         resources = page.obj.get("/Resources")

@@ -190,6 +190,9 @@
                 <button class="mode" data-mode="pointer" type="button" aria-pressed="true" title="Seleziona e sposta testo, immagini, firme, timbri e annotazioni">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3l12 9-5.5 1L15 19l-2.5 1.2-2.6-6L6 17z"/></svg>Seleziona
                 </button>
+                <button class="mode" data-mode="text" type="button" aria-pressed="false" title="Seleziona il testo per copiarlo (Ctrl+C)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6M9 20h6M12 4v16"/></svg>Seleziona testo
+                </button>
                 <button class="mode" data-mode="select" type="button" aria-pressed="false" title="Clic su un testo per modificarlo, trascinalo per spostarlo">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M12 4v16M9 20h6"/></svg>Modifica testo
                 </button>
@@ -206,9 +209,16 @@
                 <button class="btn ghost" id="doc-zoom-in" type="button" aria-label="Ingrandisci">+</button>
               </div>
             </div>
+            <div class="scan-bar" id="scan-bar" role="status" hidden>
+              <span id="scan-text"></span>
+              <button class="btn primary small-btn" id="scan-run" type="button">Riconosci il testo</button>
+              <label class="check"><input type="checkbox" id="scan-auto"> Sempre all'apertura</label>
+              <button class="btn ghost" id="scan-close" type="button" aria-label="Chiudi">×</button>
+            </div>
             <div class="canvas-wrap" id="canvas-wrap">
               <div class="page-holder" id="page-holder">
                 <canvas id="doc-canvas"></canvas>
+                <div class="textLayer" id="text-layer" hidden></div>
                 <div class="overlay" id="overlay"></div>
                 <div class="field-layer" id="field-layer"></div>
                 <div class="prep-layer" id="prep-layer"></div>

@@ -120,6 +120,11 @@ def register(sub) -> None:
     p.add_argument("--dpi", type=int, default=150, help=t("per le immagini"))
     p.add_argument("--ocr", choices=["auto", "never", "force"], default="auto")
 
+    p = add("scanedit", cmd_scanedit, t("Cambia una riga di una pagina scansionata: la copre e riscrive il testo"))
+    p.add_argument("--page", type=int, required=True, help=t("numero di pagina"))
+    p.add_argument("--rect", required=True, help=t("riquadro della riga: x0,y0,x1,y1 in punti"))
+    p.add_argument("--text", default="", help=t("testo nuovo; vuoto: la riga sparisce"))
+
     p = add("ocr", cmd_ocr, t("Rende ricercabile un PDF scansionato (testo invisibile sotto l'immagine)"))
     p.add_argument("--lang", default="it")
     p.add_argument("--all-pages", action="store_true", help=t("anche le pagine che hanno già del testo"))
@@ -461,6 +466,21 @@ def cmd_export(args) -> int:
         print(f"{written[0]} ({_kb(written[0].stat().st_size)})")
     else:
         print(t("{len} file in {target}", len=len(written), target=target))
+    return EXIT_OK
+
+
+def cmd_scanedit(args) -> int:
+    from wmt_pdf.ocrlayer import edit_scan_line
+
+    source, password, target = _prepare(args)
+    try:
+        rect = [float(v) for v in args.rect.split(",")]
+    except ValueError:
+        rect = []
+    if len(rect) != 4:
+        raise CliError(t("--rect vuole x0,y0,x1,y1 in punti"))
+    edit_scan_line(source.data, target, args.page, rect, args.text, password)
+    print(t("{target}: riga modificata", target=target))
     return EXIT_OK
 
 

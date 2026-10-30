@@ -49,7 +49,10 @@ Salva, Non salvare e Annulla. Riaprire un file già aperto riporta alla sua sche
   stessa vista con i file da inserire. Poi: ruota o elimina la pagina, cerca e sostituisci, evidenzia, e tutti gli altri strumenti
   applicati al documento aperto. Ogni modifica è una versione: si annulla e si ripete. Miniature delle pagine a
   sinistra. Nei PDF con campi (moduli) si scrive direttamente nei campi sulla pagina, caselle e scelte comprese;
-  «Applica i campi» li salva come versione nuova, e «Salva» li applica da solo. «Prepara modulo…» trasforma un PDF
+  «Applica i campi» li salva come versione nuova, e «Salva» li applica da solo. Aprendo una scansione si propone il
+  riconoscimento del testo (o lo si fa sempre, a scelta); con «Seleziona testo» si copia il testo di qualsiasi PDF,
+  e con «Modifica testo» si cambiano le righe delle scansioni: la riga viene coperta col colore dello sfondo e
+  riscritta, con un carattere simile ma non identico. «Prepara modulo…» trasforma un PDF
   piatto in modulo: «Riconosci campi» propone i campi dove ci sono trattini ____, quadratini, linee e riquadri vuoti,
   e ogni campo si disegna anche a mano trascinando sulla pagina; si spostano, si ridimensionano, si rinominano, poi
   «Crea campi».
@@ -115,6 +118,7 @@ Per i PDF protetti: `--password` oppure `--password-env NOME_VARIABILE` (non res
 | `wpdf annotations FILE [--remove -o out.pdf]` | elenca (con il testo evidenziato) o toglie le annotazioni |
 | `wpdf export FILE --to docx\|xlsx\|html\|md\|txt\|json\|xml\|png\|jpg\|tiff` | esporta; xlsx prende le tabelle con i numeri italiani convertiti; json e xml danno la struttura completa (metadati, testo e righe con coordinate, tabelle, campi, annotazioni, segnalibri) |
 | `wpdf ocr FILE -o out.pdf` | PDF ricercabile: testo invisibile sotto le pagine scansionate |
+| `wpdf scanedit FILE --page N --rect x0,y0,x1,y1 --text "..." -o out.pdf` | cambia una riga di una pagina scansionata: la copre e riscrive il testo |
 
 ### Testo
 
