@@ -11,6 +11,10 @@ OUT="$HERE/dist/wmt-pdf-$VERSION-macos-$ARCH.dmg"
 STAGE="$(mktemp -d)"
 
 test -d "$APP" || { echo "manca $APP: prima PyInstaller" >&2; exit 1; }
+# Senza certificato Apple l'app ha una firma «ad hoc»: deve essere integra, se no macOS la dice «danneggiata»
+# invece di offrire «Apri comunque».
+codesign --force --deep --sign - "$APP"
+codesign --verify --deep --strict --verbose=2 "$APP"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$OUT"

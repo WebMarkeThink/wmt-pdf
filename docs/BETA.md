@@ -17,8 +17,11 @@ Il programma non è ancora firmato digitalmente, quindi il sistema avvisa:
 
 - **Windows**: «Windows ha protetto il PC» → **Ulteriori informazioni** → **Esegui comunque**. Si installa senza
   diritti di amministratore.
-- **Mac**: apri il `.dmg`, trascina **wmt-pdf** in **Applicazioni**, poi la prima volta **clic destro sull'app →
-  Apri → Apri**. Se dice che l'app «è danneggiata», nel Terminale:
+- **Mac**: apri il `.dmg` e trascina **wmt-pdf** in **Applicazioni**. La prima volta macOS la blocca («Apple non
+  può verificare…»): premi **Fine**, poi apri **Impostazioni di Sistema → Privacy e sicurezza**, scorri in fondo fino
+  a «wmt-pdf è stata bloccata» e premi **Apri comunque**, conferma con la password del Mac e di nuovo **Apri comunque**.
+  Va fatto una volta sola (e di nuovo dopo ogni aggiornamento). Dal macOS 15 il clic destro → Apri non basta più.
+  Se invece dice che l'app «è danneggiata», nel Terminale:
   `xattr -dr com.apple.quarantine /Applications/wmt-pdf.app`
 
 I file restano sul computer: niente viene caricato su server esterni. La rete serve solo a scaricare, la prima

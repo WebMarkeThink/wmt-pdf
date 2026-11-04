@@ -27,8 +27,10 @@ Si disinstalla da Impostazioni → App, che toglie anche `wpdf` dal PATH.
 
 1. Scarica il `.dmg` adatto al Mac: `macos-arm64` per Apple Silicon (M1 e successivi), `macos-x86_64` per Intel.
 2. Aprilo e trascina **wmt-pdf** in **Applicazioni**.
-3. Per ora l'app non è firmata da Apple: la prima volta fai **clic destro sull'app → Apri → Apri**. Se macOS dice
-   che l'app «è danneggiata», è la quarantena dei file scaricati: `xattr -dr com.apple.quarantine /Applications/wmt-pdf.app`.
+3. Per ora l'app non è firmata da Apple e macOS la blocca la prima volta. Premi **Fine**, poi **Impostazioni di
+   Sistema → Privacy e sicurezza** → in fondo **Apri comunque**, password del Mac, di nuovo **Apri comunque**. Dal
+   macOS 15 il clic destro → Apri non basta più. Se macOS dice che l'app «è danneggiata», è la quarantena dei file
+   scaricati: `xattr -dr com.apple.quarantine /Applications/wmt-pdf.app`.
 4. Per avere `wpdf` nel terminale (e per Claude Code):
 
    ```bash
