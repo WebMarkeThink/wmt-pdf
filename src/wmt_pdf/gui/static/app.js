@@ -10,7 +10,7 @@ import {
 } from "./doc.js";
 import { pendingFields } from "./fields.js";
 import { initMenuBar, menuOpen } from "./menubar.js";
-import { initOrganizer, organizeDocument, organizeFiles } from "./organize.js";
+import { initOrganizer, organizeDocument, organizeFiles, organizePages } from "./organize.js";
 
 const ICON_UP = '<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>';
 const ICON_DOWN = '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>';
@@ -253,7 +253,7 @@ function openTool(tool) {
   if (tool.id === "merge") return organizeFiles([], state.view === "doc" ? "doc" : "home");
   if (tool.id === "pages") {
     if (state.view === "doc" && currentDoc()) return organizeDocument();
-    return organizeFiles([], state.view === "doc" ? "doc" : "home", t("Organizza pagine"));
+    return organizePages(state.view === "doc" ? "doc" : "home");
   }
   state.tool = tool;
   state.files = [];

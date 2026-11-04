@@ -8,6 +8,28 @@
 .org-bar .tool-row .btn { flex: none; width: auto; white-space: nowrap; }
 .org-hint { margin: 0; font-size: 13px; }
 
+/* I due passi di «Unisci»: ordine dei file, poi delle pagine. */
+.org-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.org-step {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 999px;
+  border: 1px solid var(--border, transparent); background: var(--surface); color: var(--muted); font: inherit; cursor: pointer;
+}
+.org-step b {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text); font-size: 12px;
+}
+.org-step.current { color: var(--text); border-color: var(--accent); }
+.org-step.current b { background: var(--accent); color: #fff; }
+
+/* Scheda di un file: la prima pagina con un foglio dietro, come un fascicolo. */
+.org-file .org-thumb canvas { box-shadow: 4px 4px 0 -1px var(--surface-2), 5px 5px 0 -1px rgba(0, 0, 0, .18), 0 1px 4px rgba(0, 0, 0, .25); }
+.org-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-meta { font-size: 12px; }
+.org-tools button:disabled { opacity: .35; cursor: default; }
+/* Durante un caricamento non si sposta né si toglie nulla: il punto d'inserimento resterebbe sbagliato. */
+.organize-view.busy .org-tools { visibility: hidden; }
+.organize-view.busy .org-card { cursor: progress; }
+
 .org-grid {
   max-height: calc(100vh - 230px); overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
   gap: 18px; padding: 16px; align-content: start; background: var(--surface-2); border-radius: var(--radius);

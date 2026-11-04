@@ -167,6 +167,7 @@
             </div>
             <div class="tool-row">
               <button class="btn" id="org-add" type="button" title="PDF, Word, Excel, immagini, email…">Aggiungi file…</button>
+              <button class="btn ghost" id="org-next" type="button" title="Riordina, ruota o elimina le singole pagine">Ordina le pagine →</button>
               <button class="btn ghost" id="org-rotl" type="button" title="Ruota a sinistra le pagine selezionate">↺ Ruota</button>
               <button class="btn ghost" id="org-rotr" type="button" title="Ruota a destra le pagine selezionate">Ruota ↻</button>
               <button class="btn ghost" id="org-delete" type="button" title="Elimina le pagine selezionate (Canc)">Elimina</button>
@@ -176,7 +177,12 @@
               <button class="btn primary small-btn" id="org-apply" type="button">Applica</button>
             </div>
           </header>
-          <p class="org-hint muted">Trascina le pagine per cambiarne l'ordine (anche più pagine selezionate insieme) o i file dal computer nel punto in cui inserirli. Clic per selezionare, Ctrl o Maiusc per più pagine, doppio clic per vederla in grande, Canc per eliminare.</p>
+          <nav id="org-steps" class="org-steps" aria-label="Passi" hidden>
+            <button class="org-step" id="org-step-files" type="button"><b>1</b> Ordine dei file</button>
+            <button class="org-step" id="org-step-pages" type="button"><b>2</b> Ordine delle pagine (se serve)</button>
+          </nav>
+          <p id="org-hint" class="org-hint muted">Trascina le pagine per cambiarne l'ordine (anche più pagine selezionate insieme) o i file dal computer nel punto in cui inserirli. Clic per selezionare, Ctrl o Maiusc per più pagine, doppio clic per vederla in grande, Canc per eliminare.</p>
+          <div id="org-files" class="org-grid" role="list" aria-label="File da unire" hidden></div>
           <div id="org-grid" class="org-grid" role="listbox" aria-multiselectable="true" aria-label="Pagine"></div>
           <p id="org-empty" class="org-empty" hidden>Trascina qui i file da unire, oppure usa «Aggiungi file…».</p>
           <input id="org-input" type="file" multiple hidden>

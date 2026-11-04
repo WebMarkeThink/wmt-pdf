@@ -35,7 +35,8 @@ versione nuova (si disattiva con «Controlla aggiornamenti» in basso a sinistra
 - **Aggiungi testo**, cerca e sostituisci, evidenzia; **Annulla** e **Ripeti**; **Salva** e **Salva con nome**.
 - **Organizza pagine…** nel documento: trascinare le miniature per riordinare (Ctrl o Maiusc per più pagine), ruotare,
   eliminare con Canc, doppio clic per vedere la pagina in grande, inserire altri file nel punto voluto.
-- **Unisci** più file (anche Word, Excel, immagini, email): ordinare e togliere le pagine prima di creare il PDF.
+- **Unisci** più file (anche Word, Excel, immagini, email) in due passi: prima l'ordine dei file interi, poi, se serve,
+  quello delle singole pagine, da ruotare o togliere, prima di creare il PDF.
 - **Moduli**: aprire un PDF con campi, scrivere direttamente nei campi (testo, caselle, scelte), cambiare pagina e
   tornare, poi «Applica i campi» o «Salva».
 - **Scansioni**: aprire un PDF scansionato, accettare il riconoscimento del testo, poi «Seleziona testo» per copiare e

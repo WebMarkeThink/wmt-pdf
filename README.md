@@ -56,8 +56,8 @@ Salva, Non salvare e Annulla. Riaprire un file già aperto riporta alla sua sche
   piatto in modulo: «Riconosci campi» propone i campi dove ci sono trattini ____, quadratini, linee e riquadri vuoti,
   e ogni campo si disegna anche a mano trascinando sulla pagina; si spostano, si ridimensionano, si rinominano, poi
   «Crea campi».
-- **Unisci**: i file scelti o trascinati compaiono come pagine in miniatura, da ordinare, ruotare o togliere prima di
-  creare il PDF, che si apre in una scheda nuova.
+- **Unisci**: in due passi. Prima i file interi, uno per scheda con la prima pagina, da mettere in ordine o togliere;
+  poi, se serve, le singole pagine in miniatura, da ordinare, ruotare o togliere. Il PDF si apre in una scheda nuova.
 - **Strumenti**: la griglia di icone per categoria (leggi, organizza, converti, ottimizza, modifica, moduli,
   proteggi e firma) per lavorare su uno o più file; i PDF risultanti si aprono come documento con «Apri».
 
